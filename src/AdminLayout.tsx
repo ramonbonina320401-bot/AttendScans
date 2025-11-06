@@ -406,7 +406,12 @@ TabsContent.displayName = "TabsContent";
 
 const Topbar: React.FC<{ onMenuClick: () => void }> = ({ onMenuClick }) => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [showSearchResults, setShowSearchResults] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLDivElement>(null);
+  const { students, records } = useDashboard();
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -417,10 +422,66 @@ const Topbar: React.FC<{ onMenuClick: () => void }> = ({ onMenuClick }) => {
       ) {
         setDropdownOpen(false);
       }
+      if (
+        searchRef.current &&
+        !searchRef.current.contains(event.target as Node)
+      ) {
+        setShowSearchResults(false);
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // Search functionality
+  useEffect(() => {
+    if (searchQuery.trim().length > 0) {
+      const query = searchQuery.toLowerCase();
+      const results: any[] = [];
+
+      // Search students
+      students.forEach(student => {
+        if (
+          student.name.toLowerCase().includes(query) ||
+          student.email.toLowerCase().includes(query) ||
+          student.id.toLowerCase().includes(query) ||
+          student.course.toLowerCase().includes(query) ||
+          student.section.toLowerCase().includes(query)
+        ) {
+          results.push({
+            type: 'student',
+            data: student,
+            label: student.name,
+            sublabel: `${student.email} • ${student.course} - Section ${student.section}`
+          });
+        }
+      });
+
+      // Search attendance records
+      records.forEach(record => {
+        if (
+          record.name.toLowerCase().includes(query) ||
+          record.studentId.toLowerCase().includes(query) ||
+          record.course.toLowerCase().includes(query) ||
+          record.section.toLowerCase().includes(query) ||
+          (record.className && record.className.toLowerCase().includes(query))
+        ) {
+          results.push({
+            type: 'attendance',
+            data: record,
+            label: `${record.name} - ${record.className || 'Attendance'}`,
+            sublabel: `${record.date} • ${record.course} - Section ${record.section}`
+          });
+        }
+      });
+
+      setSearchResults(results.slice(0, 10)); // Limit to 10 results
+      setShowSearchResults(true);
+    } else {
+      setSearchResults([]);
+      setShowSearchResults(false);
+    }
+  }, [searchQuery, students, records]);
 
   return (
     <header className="sticky top-0 z-30 bg-white border-b border-gray-200">
@@ -440,14 +501,64 @@ const Topbar: React.FC<{ onMenuClick: () => void }> = ({ onMenuClick }) => {
           </h1>
         </div>
         <div className="flex items-center space-x-2 sm:space-x-4">
-          <div className="relative hidden sm:block">
-            <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />{" "}
+          <div className="relative hidden sm:block" ref={searchRef}>
+            <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none z-10" />{" "}
             {/* ICON RESTORED */}
             <Input
               type="text"
-              placeholder="Search..."
+              placeholder="Search students, attendance..."
               className="pl-10 pr-4 py-2 w-32 sm:w-64"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onFocus={() => searchQuery.length > 0 && setShowSearchResults(true)}
             />
+            {showSearchResults && searchResults.length > 0 && (
+              <div className="absolute top-full mt-2 w-full sm:w-96 bg-white rounded-md shadow-lg border border-gray-200 max-h-96 overflow-y-auto z-50">
+                <div className="p-2">
+                  <p className="text-xs font-semibold text-gray-500 px-2 py-1">
+                    SEARCH RESULTS ({searchResults.length})
+                  </p>
+                  {searchResults.map((result, index) => (
+                    <div
+                      key={`${result.type}-${index}`}
+                      className="px-3 py-2 hover:bg-gray-50 rounded-md cursor-pointer"
+                      onClick={() => {
+                        setSearchQuery("");
+                        setShowSearchResults(false);
+                      }}
+                    >
+                      <div className="flex items-start">
+                        <div className="flex-shrink-0 mt-1">
+                          {result.type === 'student' ? (
+                            <FiUsers className="w-4 h-4 text-blue-500" />
+                          ) : (
+                            <FiFileText className="w-4 h-4 text-green-500" />
+                          )}
+                        </div>
+                        <div className="ml-3 flex-1">
+                          <p className="text-sm font-medium text-gray-900">
+                            {result.label}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {result.sublabel}
+                          </p>
+                        </div>
+                        <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">
+                          {result.type === 'student' ? 'Student' : 'Attendance'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {showSearchResults && searchResults.length === 0 && searchQuery.length > 0 && (
+              <div className="absolute top-full mt-2 w-full sm:w-96 bg-white rounded-md shadow-lg border border-gray-200 p-4 z-50">
+                <p className="text-sm text-gray-500 text-center">
+                  No results found for "{searchQuery}"
+                </p>
+              </div>
+            )}
           </div>
           <Button variant="ghost" size="icon" className="relative rounded-full">
             <FiBell className="w-5 h-5" /> {/* ICON RESTORED */}

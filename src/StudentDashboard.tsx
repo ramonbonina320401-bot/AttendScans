@@ -1,7 +1,8 @@
 import React, { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import QrScanner from "./QrScanner"; // The refactored scanner
-import AttendanceReport from "./AttendanceReport"; // <-- Import the new component
+import QrScanner from "./QrScanner";
+import AttendanceReport from "./AttendanceReport";
+import { markAttendance, type QRCodeData } from "./services/attendanceService";
 import {
   CheckCircle,
   FileText,
@@ -74,14 +75,31 @@ const StudentDashboard: React.FC = () => {
 
   // --- Handlers ---
 
-  const handleScanSuccess = (decodedText: string) => {
-    setScanResult(decodedText);
-    setIsAttendanceMarked(true);
-    setIsCameraActive(false);
-    setScanError(null);
-    console.log("Scan Success:", decodedText);
-    // In a real app, you'd send this to a backend,
-    // which would then update the attendance history.
+  const handleScanSuccess = async (decodedText: string) => {
+    console.log("Scanned QR Code:", decodedText);
+    
+    try {
+      // Parse the QR code data
+      const qrData: QRCodeData = JSON.parse(decodedText);
+      
+      // Mark attendance using the service
+      const result = await markAttendance(qrData);
+      
+      if (result.success) {
+        setScanResult(`${qrData.className} - ${qrData.date}`);
+        setIsAttendanceMarked(true);
+        setIsCameraActive(false);
+        setScanError(null);
+        alert(`✅ ${result.message}\nClass: ${qrData.className}`);
+      } else {
+        setScanError(result.message);
+        alert(`❌ ${result.message}`);
+      }
+    } catch (err: any) {
+      console.error("Error processing QR code:", err);
+      setScanError("Invalid QR code format. Please scan a valid attendance QR code.");
+      alert("❌ Invalid QR code. Please scan the attendance QR code from your instructor.");
+    }
   };
 
   const handleScanFailure = (error: any) => {
@@ -232,11 +250,8 @@ const StudentDashboard: React.FC = () => {
             <div className="my-6">
               {isCameraActive ? (
                 <QrScanner
-                  onScanSuccess={(decodedText, result) =>
-                    handleScanSuccess(decodedText)
-                  }
+                  onScanSuccess={(decodedText) => handleScanSuccess(decodedText)}
                   onScanFailure={handleScanFailure}
-                  startScan={isCameraActive}
                 />
               ) : (
                 <div className="w-full aspect-square bg-gray-100 rounded-lg flex flex-col items-center justify-center text-gray-500">

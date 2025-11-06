@@ -7,6 +7,7 @@ import React, {
   useRef,
 } from "react";
 import { Link, NavLink, Outlet } from "react-router-dom";
+import QRCode from 'qrcode';
 // --- react-icons imports ARE NOW INCLUDED ---
 import {
   FiHome,
@@ -746,79 +747,183 @@ const StatCard: React.FC<StatCardProps> = ({
  * 2. GENERATE QR CODE PAGE
  */
 export const GenerateQrPage: React.FC = () => {
-  const sessionData = {
-    qrCodeUrl:
-      "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=session-1761468641166",
-    sessionId: "session-1761468641166",
-    validFor: "2025-10-26", // Use YYYY-MM-DD for input
+  const [qrCodeUrl, setQrCodeUrl] = useState<string>("");
+  const [sessionData, setSessionData] = useState<any>(null);
+  const [className, setClassName] = useState<string>("Computer Science 101");
+  const [duration, setDuration] = useState<number>(5);
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  const generateQRCode = async () => {
+    setIsGenerating(true);
+    try {
+      // Import the service dynamically to avoid import issues
+      const { generateQRCodeData } = await import('./services/attendanceService');
+      
+      // Generate QR code data
+      const qrData = await generateQRCodeData(className, duration);
+      setSessionData(qrData);
+
+      // Generate QR code image
+      const qrString = JSON.stringify(qrData);
+      const qrImageUrl = await QRCode.toDataURL(qrString, {
+        width: 300,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        }
+      });
+      
+      setQrCodeUrl(qrImageUrl);
+    } catch (error) {
+      console.error("Error generating QR code:", error);
+      alert("Failed to generate QR code. Please try again.");
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const handleDownload = () => {
+    if (!qrCodeUrl) return;
+    
     const link = document.createElement("a");
-    link.href = sessionData.qrCodeUrl;
-    link.download = `attendance-qr-${sessionData.validFor}.png`;
+    link.href = qrCodeUrl;
+    link.download = `attendance-qr-${sessionData.date}.png`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  const handleGenerateNew = () => {
-    // Logic to generate a new QR code would go here
-    alert("New QR Code Generated (simulation)");
-  };
+  useEffect(() => {
+    // Generate initial QR code on component mount
+    generateQRCode();
+  }, []);
 
   return (
     <Card className="max-w-md mx-auto">
       <CardHeader className="text-center">
-        <FaQrcode className="mx-auto h-12 w-12 text-gray-700" />{" "}
-        {/* ICON RESTORED */}
+        <FaQrcode className="mx-auto h-12 w-12 text-gray-700" />
         <CardTitle className="text-2xl pt-2">
           Daily Attendance QR Code
         </CardTitle>
         <CardDescription>
-          Students scan this QR code to mark their attendance for today
+          Students scan this QR code to mark their attendance
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col items-center gap-6">
-        <div className="p-4 bg-white border rounded-lg">
-          <img
-            src={sessionData.qrCodeUrl}
-            alt="Attendance QR Code"
-            width={250}
-            height={250}
-          />
-        </div>
-        <div className="w-full space-y-4">
+        {/* QR Code Display */}
+        {qrCodeUrl ? (
+          <div className="p-4 bg-white border rounded-lg shadow-sm">
+            <img
+              src={qrCodeUrl}
+              alt="Attendance QR Code"
+              width={300}
+              height={300}
+            />
+          </div>
+        ) : (
+          <div className="p-4 bg-gray-100 border rounded-lg w-[300px] h-[300px] flex items-center justify-center">
+            <p className="text-gray-500">Generating QR Code...</p>
+          </div>
+        )}
+
+        {/* Session Details */}
+        {sessionData && (
+          <div className="w-full space-y-4">
+            <div className="grid grid-cols-3 items-center gap-4">
+              <Label htmlFor="class-name" className="text-right">
+                Class:
+              </Label>
+              <Input
+                id="class-name"
+                value={sessionData.className}
+                readOnly
+                className="col-span-2"
+              />
+            </div>
+            <div className="grid grid-cols-3 items-center gap-4">
+              <Label htmlFor="session-id" className="text-right">
+                Session ID:
+              </Label>
+              <Input
+                id="session-id"
+                value={sessionData.classId}
+                readOnly
+                className="col-span-2 text-xs"
+              />
+            </div>
+            <div className="grid grid-cols-3 items-center gap-4">
+              <Label htmlFor="valid-until" className="text-right">
+                Valid Until:
+              </Label>
+              <Input
+                id="valid-until"
+                value={new Date(sessionData.expiresAt).toLocaleTimeString()}
+                readOnly
+                className="col-span-2"
+              />
+            </div>
+            <div className="grid grid-cols-3 items-center gap-4">
+              <Label htmlFor="date" className="text-right">
+                Date:
+              </Label>
+              <Input
+                id="date"
+                value={sessionData.date}
+                readOnly
+                className="col-span-2"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Configuration Inputs */}
+        <div className="w-full space-y-4 border-t pt-4">
           <div className="grid grid-cols-3 items-center gap-4">
-            <Label htmlFor="session-id" className="text-right">
-              Session ID:
+            <Label htmlFor="class-input" className="text-right">
+              Class Name:
             </Label>
             <Input
-              id="session-id"
-              value={sessionData.sessionId}
-              readOnly
+              id="class-input"
+              value={className}
+              onChange={(e) => setClassName(e.target.value)}
               className="col-span-2"
+              placeholder="Enter class name"
             />
           </div>
           <div className="grid grid-cols-3 items-center gap-4">
-            <Label htmlFor="valid-for" className="text-right">
-              Valid for:
+            <Label htmlFor="duration-input" className="text-right">
+              Duration (min):
             </Label>
             <Input
-              id="valid-for"
-              value={sessionData.validFor}
-              readOnly
+              id="duration-input"
+              type="number"
+              value={duration}
+              onChange={(e) => setDuration(Number(e.target.value))}
               className="col-span-2"
+              min="1"
+              max="60"
             />
           </div>
         </div>
+
+        {/* Action Buttons */}
         <div className="w-full flex flex-col sm:flex-row gap-4">
-          <Button className="flex-1" onClick={handleGenerateNew}>
-            <FiRefreshCw className="mr-2 h-4 w-4" /> {/* ICON RESTORED */}
-            Generate New QR
+          <Button 
+            className="flex-1" 
+            onClick={generateQRCode}
+            disabled={isGenerating}
+          >
+            <FiRefreshCw className="mr-2 h-4 w-4" />
+            {isGenerating ? "Generating..." : "Generate New QR"}
           </Button>
-          <Button variant="outline" className="flex-1" onClick={handleDownload}>
-            <FiDownload className="mr-2 h-4 w-4" /> {/* ICON RESTORED */}
+          <Button 
+            variant="outline" 
+            className="flex-1" 
+            onClick={handleDownload}
+            disabled={!qrCodeUrl}
+          >
+            <FiDownload className="mr-2 h-4 w-4" />
             Download
           </Button>
         </div>

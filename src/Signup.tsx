@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom"; // Import routing hooks
+import { Link, useNavigate } from "react-router-dom";
+import { createUserWithEmailAndPassword, sendEmailVerification } from "firebase/auth";
+import { doc, setDoc } from "firebase/firestore";
+import { auth, db } from "./firebase";
 
 // Define interfaces for form data and errors to ensure type safety
 interface StudentFormData {
@@ -9,12 +12,14 @@ interface StudentFormData {
   email: string;
   studentId: string;
   password?: string;
+  otp?: string;
 }
 
 interface InstructorFormData {
   fullName: string;
   email: string;
   password: string;
+  otp?: string;
 }
 
 interface Errors {
@@ -22,9 +27,9 @@ interface Errors {
 }
 
 export default function Signup() {
-  const navigate = useNavigate(); // Initialize the navigation hook
-
+  const navigate = useNavigate();
   const [selectedRole, setSelectedRole] = useState("student");
+  
   const [studentFormData, setStudentFormData] = useState<StudentFormData>({
     firstName: "",
     lastName: "",
@@ -32,12 +37,14 @@ export default function Signup() {
     email: "",
     studentId: "",
     password: "",
+    otp: "",
   });
   const [instructorFormData, setInstructorFormData] =
     useState<InstructorFormData>({
       fullName: "",
       email: "",
       password: "",
+      otp: "",
     });
 
   const [errors, setErrors] = useState<Errors>({});
@@ -82,7 +89,7 @@ export default function Signup() {
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
     const { name, value } = event.target;
-    setStudentFormData((prevData) => ({
+      setStudentFormData((prevData: typeof studentFormData) => ({
       ...prevData,
       [name]: value,
     }));
@@ -97,7 +104,7 @@ export default function Signup() {
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
     const { name, value } = event.target;
-    setInstructorFormData((prevData) => ({
+      setInstructorFormData((prevData: typeof instructorFormData) => ({
       ...prevData,
       [name]: value,
     }));
@@ -140,40 +147,78 @@ export default function Signup() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!validateForm()) {
       console.log("Form has errors. Please correct them.");
       return;
     }
 
-    (async () => {
-      try {
-        const payload: any = { role: selectedRole };
-        if (selectedRole === "student") payload.studentData = studentFormData;
-        else payload.instructorData = instructorFormData;
+    try {
+      const email = selectedRole === "student" ? studentFormData.email : instructorFormData.email;
+      const password = selectedRole === "student" ? studentFormData.password : instructorFormData.password;
 
-        const resp = await fetch("http://localhost:4600/api/signup", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-
-        const data = await resp.json();
-        if (!resp.ok) {
-          console.error("Signup error", data);
-          alert(data.error || "Signup failed");
-          return;
-        }
-
-        alert("Signup successful — you can now log in");
-        // Use 'navigate' to go to login page
-        navigate("/login");
-      } catch (err) {
-        console.error(err);
-        alert("Network error");
+      if (!email || !password) {
+        setErrors(prev => ({ ...prev, general: "Email and password are required" }));
+        return;
       }
-    })();
+
+      console.log("Starting signup process for:", email);
+
+      // Create user with Firebase
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+      console.log("User created successfully:", user.uid);
+
+      // Send verification email
+      await sendEmailVerification(user);
+      console.log("Verification email sent");
+
+      // Store additional user data in Firestore
+      const userData = selectedRole === "student" 
+        ? { 
+            role: "student",
+            firstName: studentFormData.firstName,
+            lastName: studentFormData.lastName,
+            middleInitial: studentFormData.middleInitial,
+            email: studentFormData.email,
+            studentId: studentFormData.studentId,
+            createdAt: new Date().toISOString()
+          }
+        : { 
+            role: "instructor",
+            fullName: instructorFormData.fullName,
+            email: instructorFormData.email,
+            createdAt: new Date().toISOString()
+          };
+      
+      // Save to Firestore
+      console.log("Saving user data to Firestore...");
+      await setDoc(doc(db, "users", user.uid), userData);
+      console.log("User data saved successfully");
+
+      alert("Signup successful! Please check your email to verify your account before logging in.");
+      navigate("/login");
+    } catch (err: any) {
+      console.error("Signup error details:", err);
+      console.error("Error code:", err.code);
+      console.error("Error message:", err.message);
+      
+      let errorMessage = "Signup failed. Please try again.";
+      if (err.code === "auth/email-already-in-use") {
+        errorMessage = "An account with this email already exists.";
+      } else if (err.code === "auth/weak-password") {
+        errorMessage = "Password should be at least 6 characters.";
+      } else if (err.code === "auth/invalid-email") {
+        errorMessage = "Invalid email address.";
+      } else if (err.code === "auth/network-request-failed") {
+        errorMessage = "Network error. Please check your internet connection.";
+      } else if (err.code) {
+        errorMessage = `Error: ${err.code} - ${err.message}`;
+      }
+      
+      setErrors(prev => ({ ...prev, general: errorMessage }));
+    }
   };
 
   // StudentInputs and InstructorInputs JSX (no changes needed)
@@ -439,6 +484,13 @@ export default function Signup() {
             </div>
 
             {selectedRole === "student" ? StudentInputs : InstructorInputs}
+
+            {/* General Error Message */}
+            {errors.general && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                {errors.general}
+              </div>
+            )}
 
             <button
               type="submit"

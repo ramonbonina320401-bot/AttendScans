@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom"; // Import routing hooks
+import React, { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { auth } from "./firebase";
 
 // --- Success Popup Component ---
 const SuccessPopup = ({ message }: { message: string }) => (
@@ -23,54 +25,53 @@ export default function LoginComponent() {
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // This effect now uses 'navigate'
-  useEffect(() => {
-    if (successMsg) {
-      // After success message is shown, wait 1.2s then navigate to home
-      const timer = setTimeout(() => {
-        navigate("/home");
-      }, 1200);
-      return () => clearTimeout(timer); // Cleanup timer
-    }
-  }, [successMsg, navigate]);
-
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
 
-    // Payload now contains role, email, and password
-    const payload: any = {
-      role,
-      email,
-      password,
-    };
-
-    // Add student_num only if the role is student
-    if (role === "student") {
-      payload.student_num = studentNum;
-    }
-
     try {
-      const resp = await fetch("http://localhost:5174/api/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      // Sign in with Firebase
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
 
-      const data = await resp.json().catch(() => ({}));
-
-      if (!resp.ok) {
-        setError(data?.error || "Login failed. Please check your details.");
+      // Check if email is verified
+      if (!user.emailVerified) {
+        setError("Please verify your email before logging in.");
         setSubmitting(false);
         return;
       }
 
-      // Just set the success message. The useEffect will handle redirect.
+      // Success! Store user info if needed
+      console.log("Logged in user:", user);
       setSuccessMsg("Login successful! Redirecting...");
+      
+      // Navigate based on role
+      setTimeout(() => {
+        if (role === "student") {
+          navigate("/StudentDashboard");
+        } else {
+          navigate("/dashboard");
+        }
+      }, 1200);
+      
     } catch (err: any) {
-      setError(err?.message || "A network error occurred.");
+      console.error("Login error:", err);
+      
+      // Handle Firebase errors
+      let errorMessage = "Login failed. Please check your credentials.";
+      if (err.code === "auth/user-not-found") {
+        errorMessage = "No account found with this email.";
+      } else if (err.code === "auth/wrong-password") {
+        errorMessage = "Incorrect password.";
+      } else if (err.code === "auth/invalid-email") {
+        errorMessage = "Invalid email address.";
+      } else if (err.code === "auth/too-many-requests") {
+        errorMessage = "Too many failed attempts. Please try again later.";
+      }
+      
+      setError(errorMessage);
       setSubmitting(false);
     }
   };

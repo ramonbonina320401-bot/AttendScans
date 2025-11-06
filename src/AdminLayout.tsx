@@ -48,64 +48,6 @@ export interface AttendanceRecord {
   status: "PRESENT" | "LATE" | "ABSENT";
 }
 
-// --- MOCK DATA (matches your images) ---
-const mockStudents: Student[] = [
-  {
-    id: "STU001",
-    name: "John Smith",
-    email: "john.smith@university.edu",
-    course: "Computer Science",
-    section: "A",
-  },
-  {
-    id: "STU002",
-    name: "Sarah Johnson",
-    email: "sarah.j@university.edu",
-    course: "Computer Science",
-    section: "A",
-  },
-  {
-    id: "STU003",
-    name: "Michael Brown",
-    email: "m.brown@university.edu",
-    course: "Mathematics",
-    section: "B",
-  },
-  {
-    id: "STU004",
-    name: "Emily Davis",
-    email: "emily.d@university.edu",
-    course: "Computer Science",
-    section: "B",
-  },
-  {
-    id: "STU005",
-    name: "David Wilson",
-    email: "d.wilson@university.edu",
-    course: "Computer Science",
-    section: "A",
-  },
-];
-
-const mockRecords: AttendanceRecord[] = [
-  {
-    id: "R001",
-    studentId: "STU001",
-    name: "John Smith",
-    date: "2025-10-01",
-    time: "08:15 AM",
-    status: "PRESENT",
-  },
-  {
-    id: "R002",
-    studentId: "STU002",
-    name: "Sarah Johnson",
-    date: "2025-10-01",
-    time: "08:45 AM",
-    status: "LATE",
-  },
-];
-
 // --- REACT CONTEXT FOR STATE MANAGEMENT ---
 interface DashboardContextType {
   students: Student[];
@@ -661,10 +603,8 @@ export const DashboardPage: React.FC = () => {
   });
 
   useEffect(() => {
-    // Filter today's records from the stats
-    const today = new Date().toLocaleDateString();
-    // For now, we'll use the overall stats
-    // You can enhance this to filter by today's date
+    // Calculate today's stats from total records
+    // For now showing proportional values based on total stats
     setTodayStats({
       present: Math.round(stats.present * 0.7), // Mock today percentage
       late: Math.round(stats.late * 0.8),
@@ -1518,7 +1458,7 @@ export const AdminLayout: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const { getAllStudents, getInstructorAttendanceRecords, getAttendanceStats } = await import('./services/adminService');
+        const { getAllStudents, getInstructorAttendanceRecords } = await import('./services/adminService');
         
         // Fetch students and attendance records
         const [studentsData, recordsData] = await Promise.all([
@@ -1559,9 +1499,6 @@ export const AdminLayout: React.FC = () => {
 
   // Derived stats
   const stats = useMemo(() => {
-    const today = new Date().toLocaleDateString();
-    const todayRecords = records.filter(r => r.date === today);
-    
     return {
       total: records.length,
       present: records.filter(r => r.status === "PRESENT").length,

@@ -1,8 +1,10 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import QrScanner from "./QrScanner";
 import AttendanceReport from "./AttendanceReport";
-import { markAttendance, type QRCodeData } from "./services/attendanceService";
+import { markAttendance, getStudentAttendance, type QRCodeData, type AttendanceRecord } from "./services/attendanceService";
+import { auth, db } from "./firebase";
+import { doc, getDoc } from "firebase/firestore";
 import {
   CheckCircle,
   FileText,
@@ -19,47 +21,6 @@ import { Html5Qrcode } from "html5-qrcode";
 // We need a non-visible element for the file scanner to mount to
 const FILE_SCANNER_REGION_ID = "qr-file-scanner-region";
 
-// --- Mock Data ---
-// You would normally fetch this data from an API
-const MOCK_STATS = {
-  totalClasses: 20,
-  present: 18,
-  percentage: 90, // (18 / 20) * 100
-};
-
-const MOCK_HISTORY = [
-  {
-    id: "1",
-    date: "October 26, 2025",
-    subject: "Software Engineering",
-    status: "Present" as const,
-  },
-  {
-    id: "2",
-    date: "October 25, 2025",
-    subject: "Data Structures",
-    status: "Present" as const,
-  },
-  {
-    id: "3",
-    date: "October 24, 2025",
-    subject: "Software Engineering",
-    status: "Absent" as const,
-  },
-  {
-    id: "4",
-    date: "October 23, 2025",
-    subject: "Data Structures",
-    status: "Present" as const,
-  },
-  {
-    id: "5",
-    date: "October 22, 2025",
-    subject: "Software Engineering",
-    status: "Present" as const,
-  },
-];
-
 // This is the component that holds both pages
 const StudentDashboard: React.FC = () => {
   // --- State ---
@@ -68,10 +29,51 @@ const StudentDashboard: React.FC = () => {
   const [isAttendanceMarked, setIsAttendanceMarked] = useState(false);
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
+  const [studentName, setStudentName] = useState<string>("Student");
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // navigation
   const navigate = useNavigate();
+
+  // --- Fetch student data and attendance records on mount ---
+  useEffect(() => {
+    const fetchStudentData = async () => {
+      try {
+        const user = auth.currentUser;
+        if (!user) {
+          navigate("/login");
+          return;
+        }
+
+        // Fetch student info
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        const userData = userDoc.data();
+        
+        if (userData) {
+          const fullName = `${userData.firstName || ''} ${userData.lastName || ''}`.trim();
+          setStudentName(fullName || "Student");
+        }
+
+        // Fetch attendance records
+        const records = await getStudentAttendance();
+        setAttendanceRecords(records);
+
+        // Check if attendance is already marked today
+        const today = new Date().toLocaleDateString();
+        const markedToday = records.some(record => record.date === today);
+        setIsAttendanceMarked(markedToday);
+
+        setIsLoading(false);
+      } catch (error) {
+        console.error("Error fetching student data:", error);
+        setIsLoading(false);
+      }
+    };
+
+    fetchStudentData();
+  }, [navigate]);
 
   // --- Handlers ---
 
@@ -90,6 +92,11 @@ const StudentDashboard: React.FC = () => {
         setIsAttendanceMarked(true);
         setIsCameraActive(false);
         setScanError(null);
+        
+        // Refresh attendance records
+        const records = await getStudentAttendance();
+        setAttendanceRecords(records);
+        
         alert(`✅ ${result.message}\nClass: ${qrData.className}`);
       } else {
         setScanError(result.message);
@@ -139,16 +146,43 @@ const StudentDashboard: React.FC = () => {
   // --- View Switching Logic ---
 
   if (view === "report") {
+    // Calculate stats from real attendance records
+    const totalClasses = attendanceRecords.length;
+    const present = attendanceRecords.filter(r => r.status === 'present').length;
+    const percentage = totalClasses > 0 ? Math.round((present / totalClasses) * 100) : 0;
+
+    // Format attendance records for the report
+    const formattedHistory = attendanceRecords.map((record, index) => ({
+      id: index.toString(),
+      date: record.date,
+      subject: record.className,
+      status: "Present" as const,
+    }));
+
     return (
       <AttendanceReport
         onBack={() => setView("dashboard")}
-        stats={MOCK_STATS}
-        history={MOCK_HISTORY}
+        stats={{ totalClasses, present, percentage }}
+        history={formattedHistory}
+        studentName={studentName}
       />
     );
   }
 
   // --- Default View: Dashboard ---
+  
+  // Show loading state while fetching data
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-8">
       <div className="max-w-3xl mx-auto">
@@ -163,7 +197,7 @@ const StudentDashboard: React.FC = () => {
                 Student Dashboard
               </h1>
               <div className="flex items-center gap-2">
-                <p className="text-sm text-gray-600">Welcome, John A. Doe</p>
+                <p className="text-sm text-gray-600">Welcome, {studentName}</p>
                 <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-0.5 rounded-full bg-green-100 text-green-800">
                   <ShieldCheck size={12} />
                   Verified

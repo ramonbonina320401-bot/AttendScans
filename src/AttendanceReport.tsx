@@ -30,6 +30,7 @@ interface AttendanceReportProps {
   onBack: () => void;
   stats: ReportStats;
   history: AttendanceRecord[];
+  studentName?: string;
 }
 
 /**
@@ -39,6 +40,7 @@ const AttendanceReport: React.FC<AttendanceReportProps> = ({
   onBack,
   stats,
   history,
+  studentName = "Student",
 }) => {
   const isPoor = stats.percentage < 75;
 
@@ -62,7 +64,7 @@ const AttendanceReport: React.FC<AttendanceReportProps> = ({
               <h1 className="text-2xl font-bold text-gray-900">
                 My Attendance Report
               </h1>
-              <p className="text-sm text-gray-600">John A. Doe</p>
+              <p className="text-sm text-gray-600">{studentName}</p>
             </div>
           </div>
         </header>

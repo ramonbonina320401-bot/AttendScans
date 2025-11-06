@@ -35,6 +35,7 @@ const StudentDashboard: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false); // Prevent multiple scans
   const [sessionId, setSessionId] = useState<string>(""); // Manual session ID entry
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // navigation
@@ -315,18 +316,8 @@ const StudentDashboard: React.FC = () => {
               View Report
             </button>
             <button
-              onClick={async () => {
-                try {
-                  // stop camera if active
-                  setIsCameraActive(false);
-                  setScanError(null);
-                  // Sign out from Firebase
-                  await signOut(auth);
-                  // Navigate to login
-                  navigate("/login", { replace: true });
-                } catch (error) {
-                  console.error("Error signing out:", error);
-                }
+              onClick={() => {
+                setShowLogoutConfirm(true);
               }}
               className="flex items-center justify-center gap-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg px-3 py-2 hover:bg-gray-50"
             >
@@ -335,6 +326,52 @@ const StudentDashboard: React.FC = () => {
             </button>
           </nav>
         </header>
+
+        {/* Logout Confirmation Modal */}
+        {showLogoutConfirm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+              <div className="text-center">
+                <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+                  <LogOut className="h-6 w-6 text-red-600" />
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  Confirm Logout
+                </h3>
+                <p className="text-sm text-gray-500 mb-6">
+                  Are you sure you want to log out? You will need to log in again to mark attendance.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowLogoutConfirm(false)}
+                    className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={async () => {
+                      try {
+                        // stop camera if active
+                        setIsCameraActive(false);
+                        setScanError(null);
+                        setShowLogoutConfirm(false);
+                        // Sign out from Firebase
+                        await signOut(auth);
+                        // Navigate to login
+                        navigate("/login", { replace: true });
+                      } catch (error) {
+                        console.error("Error signing out:", error);
+                      }
+                    }}
+                    className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium"
+                  >
+                    Logout
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* --- Main Dashboard Content --- */}
         <main className="space-y-6">

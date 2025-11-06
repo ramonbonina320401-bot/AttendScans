@@ -302,7 +302,7 @@ const DropdownContent: React.FC<{
   align?: "right" | "left";
 }> = ({ children, align = "right" }) => (
   <div
-    className={`absolute z-10 mt-2 w-48 bg-white rounded-md shadow-lg py-1 ring-1 ring-black ring-opacity-5
+    className={`absolute z-50 mt-2 w-48 bg-white rounded-md shadow-lg py-1 ring-1 ring-black ring-opacity-5 max-h-48 overflow-visible
       ${align === "right" ? "right-0" : "left-0"}`}
   >
     {children}
@@ -798,11 +798,16 @@ export const GenerateQrPage: React.FC = () => {
       // Import the service dynamically to avoid import issues
       const { generateQRCodeData } = await import('./services/attendanceService');
       
+      // Extract course and section from selectedCourseSection (format: "CS101 - Section A")
+      const match = selectedCourseSection.match(/^(.+?)\s*-\s*Section\s*(.+)$/);
+      const course = match ? match[1].trim() : selectedCourseSection;
+      const section = match ? match[2].trim() : 'A';
+      
       // Combine course-section and class name for the full class identifier
       const fullClassName = `${selectedCourseSection} - ${className}`;
       
-      // Generate QR code data
-      const qrData = await generateQRCodeData(fullClassName, duration);
+      // Generate QR code data with course and section
+      const qrData = await generateQRCodeData(fullClassName, duration, course, section);
       setSessionData(qrData);
 
       // Generate QR code image
@@ -842,9 +847,14 @@ export const GenerateQrPage: React.FC = () => {
       
       const { generateQRCodeData } = await import('./services/attendanceService');
       
+      // Extract course and section from selectedCourseSection (format: "CS101 - Section A")
+      const match = selectedCourseSection.match(/^(.+?)\s*-\s*Section\s*(.+)$/);
+      const course = match ? match[1].trim() : selectedCourseSection;
+      const section = match ? match[2].trim() : 'A';
+      
       // Combine course-section and class name
       const fullClassName = `${selectedCourseSection} - ${className}`;
-      const qrData = await generateQRCodeData(fullClassName, duration);
+      const qrData = await generateQRCodeData(fullClassName, duration, course, section);
       console.log("Generated QR data:", qrData);
       setSessionData(qrData);
 
@@ -885,6 +895,8 @@ export const GenerateQrPage: React.FC = () => {
         timestamp: qrData.timestamp,
         expiresAt: qrData.expiresAt,
         date: qrData.date,
+        course: qrData.course,
+        section: qrData.section,
         deployedAt: new Date().toISOString()
       });
       console.log("Active session saved to Firestore with sessionId:", qrData.sessionId);
@@ -1446,7 +1458,7 @@ export const StudentManagementPage: React.FC = () => {
             Add Student
           </Button>
         </div>
-        <div className="overflow-x-auto rounded-lg border">
+        <div className="overflow-x-auto rounded-lg border relative">
           <table className="w-full text-sm">
             <thead className="bg-gray-50">
               <tr>
@@ -1460,10 +1472,7 @@ export const StudentManagementPage: React.FC = () => {
                   EMAIL
                 </th>
                 <th className="px-4 py-3 text-left font-medium text-gray-600">
-                  COURSE
-                </th>
-                <th className="px-4 py-3 text-left font-medium text-gray-600">
-                  SECTION
+                  COURSE & SECTION
                 </th>
                 <th className="px-4 py-3 text-right font-medium text-gray-600">
                   ACTIONS
@@ -1477,8 +1486,11 @@ export const StudentManagementPage: React.FC = () => {
                     <td className="px-4 py-3 font-medium">{student.id}</td>
                     <td className="px-4 py-3">{student.name}</td>
                     <td className="px-4 py-3">{student.email}</td>
-                    <td className="px-4 py-3">{student.course}</td>
-                    <td className="px-4 py-3">{student.section}</td>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center">
+                        {student.course} • Section {student.section}
+                      </span>
+                    </td>
                     <td className="px-4 py-3 text-right">
                       <CustomDropdown>
                         <DropdownTrigger>
@@ -1508,7 +1520,7 @@ export const StudentManagementPage: React.FC = () => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6} className="text-center px-4 py-4">
+                  <td colSpan={5} className="text-center px-4 py-4">
                     No students found.
                   </td>
                 </tr>

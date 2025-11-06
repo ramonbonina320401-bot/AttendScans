@@ -175,7 +175,9 @@ const StudentDashboard: React.FC = () => {
         timestamp: sessionData.timestamp,
         expiresAt: sessionData.expiresAt,
         date: sessionData.date,
-        sessionId: sessionData.sessionId
+        sessionId: sessionData.sessionId,
+        course: sessionData.course || '',
+        section: sessionData.section || ''
       };
 
       // Mark attendance using the service

@@ -10,6 +10,8 @@ export interface QRCodeData {
   expiresAt: string;
   date: string;
   sessionId: string; // Unique 8-character alphanumeric code
+  course: string; // Course name (e.g., "CS101")
+  section: string; // Section identifier (e.g., "A", "B")
 }
 
 export interface AttendanceRecord {
@@ -34,7 +36,12 @@ const generateSessionId = (): string => {
 };
 
 // Generate QR code data for a class
-export const generateQRCodeData = async (className: string, duration: number = 5): Promise<QRCodeData> => {
+export const generateQRCodeData = async (
+  className: string, 
+  duration: number = 5, 
+  course: string, 
+  section: string
+): Promise<QRCodeData> => {
   const user = auth.currentUser;
   if (!user) throw new Error("User not authenticated");
 
@@ -54,7 +61,9 @@ export const generateQRCodeData = async (className: string, duration: number = 5
     timestamp: now.toISOString(),
     expiresAt: expiresAt.toISOString(),
     date: now.toLocaleDateString(),
-    sessionId
+    sessionId,
+    course,
+    section
   };
 
   return qrData;
@@ -115,6 +124,29 @@ export const markAttendance = async (qrData: QRCodeData): Promise<{ success: boo
       return { 
         success: false, 
         message: "You are not registered in this instructor's student list. Please contact your instructor to add your email to the system." 
+      };
+    }
+
+    // Verify student's course and section match the QR code's course and section
+    let isEnrolledInThisSection = false;
+    let studentCourse = '';
+    let studentSection = '';
+    
+    registeredStudentsSnapshot.forEach((doc) => {
+      const studentData = doc.data();
+      studentCourse = studentData.course;
+      studentSection = studentData.section;
+      
+      // Check if course and section match
+      if (studentData.course === qrData.course && studentData.section === qrData.section) {
+        isEnrolledInThisSection = true;
+      }
+    });
+
+    if (!isEnrolledInThisSection) {
+      return {
+        success: false,
+        message: `You are registered in ${studentCourse} - Section ${studentSection}, but this QR code is for ${qrData.course} - Section ${qrData.section}. Please scan the correct QR code for your section.`
       };
     }
 

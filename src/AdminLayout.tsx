@@ -1976,79 +1976,79 @@ export const AdminLayout: React.FC = () => {
 
   // Fetch data from Firebase on mount
   useEffect(() => {
-    const fetchData = async () => {
+    let unsubscribe: () => void;
+
+    const initAuthAndFetchData = async () => {
       try {
-        // Wait for auth to be ready
         const { auth } = await import('./firebase');
-        const user = auth.currentUser;
+        const { onAuthStateChanged } = await import('firebase/auth');
         
-        if (!user) {
-          console.log("No user authenticated, skipping data fetch");
-          setIsLoading(false);
-          return;
-        }
-        
-        const { getAllStudents, getInstructorAttendanceRecords } = await import('./services/adminService');
-        
-        console.log("Fetching dashboard data for user:", user.uid);
-        
-        // Fetch students and attendance records
-        const [studentsData, recordsData] = await Promise.all([
-          getAllStudents(),
-          getInstructorAttendanceRecords()
-        ]);
+        // Wait for auth state to be ready
+        unsubscribe = onAuthStateChanged(auth, async (user) => {
+          console.log("Auth state changed:", user ? user.uid : "No user");
+          
+          if (!user) {
+            console.log("No user authenticated, skipping data fetch");
+            setIsLoading(false);
+            return;
+          }
+          
+          // User is authenticated, fetch data
+          const { getAllStudents, getInstructorAttendanceRecords } = await import('./services/adminService');
+          
+          console.log("Fetching dashboard data for user:", user.uid);
+          
+          try {
+            // Fetch students and attendance records
+            const [studentsData, recordsData] = await Promise.all([
+              getAllStudents(),
+              getInstructorAttendanceRecords()
+            ]);
 
-        console.log("Students fetched:", studentsData.length);
-        console.log("Attendance records fetched:", recordsData.length);
-        console.log("Sample attendance record:", recordsData[0]);
+            console.log("Students fetched:", studentsData.length);
+            console.log("Attendance records fetched:", recordsData.length);
+            console.log("Sample attendance record:", recordsData[0]);
 
-        // Map to the Student interface format
-        const mappedStudents: Student[] = studentsData.map(s => ({
-          id: s.id,
-          name: `${s.firstName} ${s.lastName}`,
-          email: s.email,
-          course: s.course || 'N/A',
-          section: s.section || 'N/A'
-        }));
+            // Map to the Student interface format
+            const mappedStudents: Student[] = studentsData.map(s => ({
+              id: s.id,
+              name: `${s.firstName} ${s.lastName}`,
+              email: s.email,
+              course: s.course || 'N/A',
+              section: s.section || 'N/A'
+            }));
 
-        // Map to the AttendanceRecord interface format
-        const mappedRecords: AttendanceRecord[] = recordsData.map(r => ({
-          id: r.id,
-          studentId: r.studentId,
-          name: r.studentName,
-          date: r.date,
-          time: new Date(r.scannedAt).toLocaleTimeString(),
-          status: r.status.toUpperCase() as "PRESENT" | "LATE" | "ABSENT"
-        }));
+            // Map to the AttendanceRecord interface format
+            const mappedRecords: AttendanceRecord[] = recordsData.map(r => ({
+              id: r.id,
+              studentId: r.studentId,
+              name: r.studentName,
+              date: r.date,
+              time: new Date(r.scannedAt).toLocaleTimeString(),
+              status: r.status.toUpperCase() as "PRESENT" | "LATE" | "ABSENT"
+            }));
 
-        console.log("Mapped records:", mappedRecords);
+            console.log("Mapped records:", mappedRecords);
 
-        setStudents(mappedStudents);
-        setRecords(mappedRecords);
+            setStudents(mappedStudents);
+            setRecords(mappedRecords);
+          } catch (error) {
+            console.error("Error fetching dashboard data:", error);
+          } finally {
+            setIsLoading(false);
+          }
+        });
       } catch (error) {
-        console.error("Error fetching dashboard data:", error);
-      } finally {
+        console.error("Error initializing auth:", error);
         setIsLoading(false);
       }
     };
 
-    fetchData();
-  }, []);
+    initAuthAndFetchData();
 
-  // Add auth state listener to ensure auth is ready
-  useEffect(() => {
-    const initAuth = async () => {
-      const { auth } = await import('./firebase');
-      const { onAuthStateChanged } = await import('firebase/auth');
-      
-      const unsubscribe = onAuthStateChanged(auth, (user) => {
-        console.log("Auth state changed:", user ? user.uid : "No user");
-      });
-
-      return () => unsubscribe();
+    return () => {
+      if (unsubscribe) unsubscribe();
     };
-
-    initAuth();
   }, []);
 
   // Derived stats

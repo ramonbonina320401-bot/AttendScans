@@ -23,6 +23,8 @@ export interface AttendanceRecord {
   scannedAt: string;
   date: string;
   status: 'present';
+  course: string; // Course name (e.g., "CS101")
+  section: string; // Section identifier (e.g., "A", "B")
 }
 
 // Generate a secure random session ID (8 characters: uppercase letters and numbers)
@@ -173,7 +175,9 @@ export const markAttendance = async (qrData: QRCodeData): Promise<{ success: boo
       instructorId: qrData.instructorId,
       scannedAt: new Date().toISOString(),
       date: qrData.date,
-      status: 'present'
+      status: 'present',
+      course: qrData.course,
+      section: qrData.section
     };
 
     // Save to Firestore

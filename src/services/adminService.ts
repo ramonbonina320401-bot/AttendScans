@@ -93,7 +93,9 @@ export const getInstructorAttendanceRecords = async (): Promise<AdminAttendanceR
           instructorId: data.instructorId,
           scannedAt: data.scannedAt,
           date: data.date,
-          status: data.status
+          status: data.status,
+          course: data.course || 'N/A',
+          section: data.section || 'N/A'
         });
       }
     });
@@ -305,7 +307,9 @@ export const getStudentAttendanceRecords = async (studentId: string): Promise<Ad
         instructorId: data.instructorId,
         scannedAt: data.scannedAt,
         date: data.date,
-        status: data.status
+        status: data.status,
+        course: data.course || 'N/A',
+        section: data.section || 'N/A'
       });
     });
 

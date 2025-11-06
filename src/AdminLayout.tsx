@@ -26,6 +26,7 @@ import {
   FiDownload,
   FiRefreshCw,
   FiAlertTriangle,
+  FiArrowUp,
 } from "react-icons/fi";
 import { FaQrcode } from "react-icons/fa";
 // Date formatting is done inline with native JS, no import needed
@@ -46,6 +47,9 @@ export interface AttendanceRecord {
   date: string; // YYYY-MM-DD
   time: string; // HH:MM AM/PM
   status: "PRESENT" | "LATE" | "ABSENT";
+  course: string; // Course name
+  section: string; // Section identifier
+  className?: string; // Optional class name for display
 }
 
 // --- REACT CONTEXT FOR STATE MANAGEMENT ---
@@ -615,7 +619,10 @@ export const DashboardPage: React.FC = () => {
         name: r.studentName,
         date: r.date,
         time: new Date(r.scannedAt).toLocaleTimeString(),
-        status: r.status.toUpperCase() as "PRESENT" | "LATE" | "ABSENT"
+        status: r.status.toUpperCase() as "PRESENT" | "LATE" | "ABSENT",
+        course: r.course || 'N/A',
+        section: r.section || 'N/A',
+        className: r.className
       }));
       
       setRecords(mappedRecords);
@@ -1232,12 +1239,37 @@ export const GenerateQrPage: React.FC = () => {
 export const AttendanceRecordsPage: React.FC = () => {
   const { records, setRecords } = useDashboard();
   const [isRefreshing, setIsRefreshing] = useState(false);
-  // We must use YYYY-MM-DD format for <input type="date">
-  const [dateFrom, setDateFrom] = useState("2025-10-01");
-  const [dateTo, setDateTo] = useState("2025-10-25");
+  
+  // Get current year's January 1st
+  const currentYear = new Date().getFullYear();
+  const [dateFrom, setDateFrom] = useState(`${currentYear}-01-01`);
+  
+  // Get today's date in YYYY-MM-DD format
+  const today = new Date().toISOString().split('T')[0];
+  const [dateTo, setDateTo] = useState(today);
+  
+  // Filter states
+  const [selectedCourse, setSelectedCourse] = useState("All Courses");
+  const [selectedSection, setSelectedSection] = useState("All Sections");
+  
+  // Sorting state
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
-  const courses = ["All Courses", "Computer Science", "Mathematics"];
-  const sections = ["All Sections", "A", "B"];
+  // Get unique courses and sections from records
+  const uniqueCourseSections = useMemo(() => {
+    const coursesSet = new Set<string>();
+    const sectionsSet = new Set<string>();
+    
+    records.forEach(record => {
+      if (record.course && record.course !== 'N/A') coursesSet.add(record.course);
+      if (record.section && record.section !== 'N/A') sectionsSet.add(record.section);
+    });
+    
+    return {
+      courses: ['All Courses', ...Array.from(coursesSet).sort()],
+      sections: ['All Sections', ...Array.from(sectionsSet).sort()]
+    };
+  }, [records]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -1251,7 +1283,10 @@ export const AttendanceRecordsPage: React.FC = () => {
         name: r.studentName,
         date: r.date,
         time: new Date(r.scannedAt).toLocaleTimeString(),
-        status: r.status.toUpperCase() as "PRESENT" | "LATE" | "ABSENT"
+        status: r.status.toUpperCase() as "PRESENT" | "LATE" | "ABSENT",
+        course: r.course || 'N/A',
+        section: r.section || 'N/A',
+        className: r.className
       }));
       
       setRecords(mappedRecords);
@@ -1263,10 +1298,47 @@ export const AttendanceRecordsPage: React.FC = () => {
     }
   };
 
+  const handleReset = () => {
+    setDateFrom(`${currentYear}-01-01`);
+    setDateTo(today);
+    setSelectedCourse("All Courses");
+    setSelectedSection("All Sections");
+  };
+
+  const toggleSort = () => {
+    setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+  };
+
   const filteredRecords = useMemo(() => {
-    // Add real filtering logic here based on state
-    return records;
-  }, [records, dateFrom, dateTo]);
+    let filtered = records.filter(record => {
+      // Date filtering
+      const recordDate = new Date(record.date);
+      const fromDate = new Date(dateFrom);
+      const toDate = new Date(dateTo);
+      const withinDateRange = recordDate >= fromDate && recordDate <= toDate;
+      
+      // Course filtering
+      const courseMatch = selectedCourse === "All Courses" || record.course === selectedCourse;
+      
+      // Section filtering
+      const sectionMatch = selectedSection === "All Sections" || record.section === selectedSection;
+      
+      return withinDateRange && courseMatch && sectionMatch;
+    });
+    
+    // Sort by name
+    filtered.sort((a, b) => {
+      const nameA = a.name.toLowerCase();
+      const nameB = b.name.toLowerCase();
+      if (sortOrder === 'asc') {
+        return nameA < nameB ? -1 : nameA > nameB ? 1 : 0;
+      } else {
+        return nameA > nameB ? -1 : nameA < nameB ? 1 : 0;
+      }
+    });
+    
+    return filtered;
+  }, [records, dateFrom, dateTo, selectedCourse, selectedSection, sortOrder]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -1306,8 +1378,11 @@ export const AttendanceRecordsPage: React.FC = () => {
             </div>
             <div>
               <Label>Course</Label>
-              <CustomSelect defaultValue={courses[0]}>
-                {courses.map((course) => (
+              <CustomSelect 
+                value={selectedCourse}
+                onChange={(e) => setSelectedCourse(e.target.value)}
+              >
+                {uniqueCourseSections.courses.map((course) => (
                   <option key={course} value={course}>
                     {course}
                   </option>
@@ -1316,8 +1391,11 @@ export const AttendanceRecordsPage: React.FC = () => {
             </div>
             <div>
               <Label>Section</Label>
-              <CustomSelect defaultValue={sections[0]}>
-                {sections.map((section) => (
+              <CustomSelect 
+                value={selectedSection}
+                onChange={(e) => setSelectedSection(e.target.value)}
+              >
+                {uniqueCourseSections.sections.map((section) => (
                   <option key={section} value={section}>
                     {section}
                   </option>
@@ -1326,13 +1404,18 @@ export const AttendanceRecordsPage: React.FC = () => {
             </div>
             <div className="flex gap-4 sm:col-span-2 lg:col-span-4">
               <Button
-                type="submit"
+                type="button"
                 className="flex-1"
                 onClick={(e) => e.preventDefault()}
               >
                 Apply Filters
               </Button>
-              <Button type="reset" variant="outline" className="flex-1">
+              <Button 
+                type="button" 
+                variant="outline" 
+                className="flex-1"
+                onClick={handleReset}
+              >
                 Reset
               </Button>
             </div>
@@ -1341,11 +1424,19 @@ export const AttendanceRecordsPage: React.FC = () => {
       </Card>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Attendance List</CardTitle>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={toggleSort}
+          >
+            <FiArrowUp className={`mr-2 h-4 w-4 transition-transform ${sortOrder === 'desc' ? 'rotate-180' : ''}`} />
+            Sort by Name ({sortOrder === 'asc' ? 'A-Z' : 'Z-A'})
+          </Button>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto rounded-lg border">
+          <div className="overflow-x-auto rounded-lg border relative">
             <table className="w-full text-sm">
               <thead className="bg-gray-50">
                 <tr>
@@ -1354,6 +1445,9 @@ export const AttendanceRecordsPage: React.FC = () => {
                   </th>
                   <th className="px-4 py-3 text-left font-medium text-gray-600">
                     NAME
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-600">
+                    COURSE & SECTION
                   </th>
                   <th className="px-4 py-3 text-left font-medium text-gray-600">
                     DATE
@@ -1374,6 +1468,11 @@ export const AttendanceRecordsPage: React.FC = () => {
                         {record.studentId}
                       </td>
                       <td className="px-4 py-3">{record.name}</td>
+                      <td className="px-4 py-3">
+                        <span className="inline-flex items-center">
+                          {record.course} • Section {record.section}
+                        </span>
+                      </td>
                       <td className="px-4 py-3">{record.date}</td>
                       <td className="px-4 py-3">{record.time}</td>
                       <td className="px-4 py-3">
@@ -1383,7 +1482,7 @@ export const AttendanceRecordsPage: React.FC = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={5} className="text-center px-4 py-4">
+                    <td colSpan={6} className="text-center px-4 py-4">
                       No records found.
                     </td>
                   </tr>
@@ -2139,7 +2238,10 @@ export const AdminLayout: React.FC = () => {
               name: r.studentName,
               date: r.date,
               time: new Date(r.scannedAt).toLocaleTimeString(),
-              status: r.status.toUpperCase() as "PRESENT" | "LATE" | "ABSENT"
+              status: r.status.toUpperCase() as "PRESENT" | "LATE" | "ABSENT",
+              course: r.course || 'N/A',
+              section: r.section || 'N/A',
+              className: r.className
             }));
 
             console.log("Mapped records:", mappedRecords);
@@ -2222,7 +2324,10 @@ export const AdminLayout: React.FC = () => {
         name: r.studentName,
         date: r.date,
         time: new Date(r.scannedAt).toLocaleTimeString(),
-        status: r.status.toUpperCase() as "PRESENT" | "LATE" | "ABSENT"
+        status: r.status.toUpperCase() as "PRESENT" | "LATE" | "ABSENT",
+        course: r.course || 'N/A',
+        section: r.section || 'N/A',
+        className: r.className
       }));
 
       setStudents(mappedStudents);

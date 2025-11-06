@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { createUserWithEmailAndPassword, sendEmailVerification } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore";
+import { doc, setDoc, getDoc } from "firebase/firestore";
 import { auth, db } from "./firebase";
+import { useAuthState } from "react-firebase-hooks/auth";
 
 // Define interfaces for form data and errors to ensure type safety
 interface StudentFormData {
@@ -28,6 +29,7 @@ interface Errors {
 
 export default function Signup() {
   const navigate = useNavigate();
+  const [user, loading] = useAuthState(auth);
   const [selectedRole, setSelectedRole] = useState("student");
   
   const [studentFormData, setStudentFormData] = useState<StudentFormData>({
@@ -48,6 +50,28 @@ export default function Signup() {
     });
 
   const [errors, setErrors] = useState<Errors>({});
+
+  // Redirect if already logged in
+  useEffect(() => {
+    const checkAuth = async () => {
+      if (user && !loading) {
+        try {
+          const userDoc = await getDoc(doc(db, "users", user.uid));
+          if (userDoc.exists()) {
+            const userRole = userDoc.data().role;
+            if (userRole === "student") {
+              navigate("/StudentDashboard", { replace: true });
+            } else if (userRole === "instructor" || userRole === "admin") {
+              navigate("/dashboard", { replace: true });
+            }
+          }
+        } catch (error) {
+          console.error("Error checking auth:", error);
+        }
+      }
+    };
+    checkAuth();
+  }, [user, loading, navigate]);
   const [isFormValid, setIsFormValid] = useState(false);
 
   // Effect to re-validate form

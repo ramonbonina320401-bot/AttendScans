@@ -17,6 +17,10 @@ import {
   SettingsPage,
 } from "./AdminLayout.tsx"; // Assuming AdminLayout.tsx is in src/
 
+// --- Import Security Components ---
+import ProtectedRoute from "./ProtectedRoute.tsx";
+import ActivityMonitor from "./ActivityMonitor.tsx";
+
 function App() {
   return (
     <Router>
@@ -26,13 +30,29 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
 
-        {/* --- Original Student Dashboard Route (Standalone) --- */}
-        {/* Keep this if it's separate from the admin dashboard */}
-        <Route path="/StudentDashboard" element={<StudentDashboard />} />
+        {/* --- Protected Student Dashboard Route --- */}
+        <Route 
+          path="/StudentDashboard" 
+          element={
+            <ProtectedRoute requiredRole="student">
+              <ActivityMonitor timeout={5 * 60 * 1000} warningTime={60 * 1000}>
+                <StudentDashboard />
+              </ActivityMonitor>
+            </ProtectedRoute>
+          } 
+        />
 
-        {/* --- Admin Dashboard Routes (Using AdminLayout) --- */}
-        {/* This Route now acts as a PARENT for all admin pages */}
-        <Route path="/dashboard" element={<AdminLayout />}>
+        {/* --- Protected Admin Dashboard Routes (Using AdminLayout) --- */}
+        <Route 
+          path="/dashboard" 
+          element={
+            <ProtectedRoute requiredRole="instructor">
+              <ActivityMonitor timeout={5 * 60 * 1000} warningTime={60 * 1000}>
+                <AdminLayout />
+              </ActivityMonitor>
+            </ProtectedRoute>
+          }
+        >
           {/* Child Routes - these render inside AdminLayout's <Outlet /> */}
 
           {/* index=true makes this the default page for /dashboard */}

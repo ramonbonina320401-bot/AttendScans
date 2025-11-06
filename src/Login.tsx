@@ -1,7 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "./firebase";
+import { auth, db } from "./firebase";
+import { useAuthState } from "react-firebase-hooks/auth";
+import { doc, getDoc } from "firebase/firestore";
 
 // --- Success Popup Component ---
 const SuccessPopup = ({ message }: { message: string }) => (
@@ -13,6 +15,7 @@ const SuccessPopup = ({ message }: { message: string }) => (
 // --- Login Component ---
 export default function LoginComponent() {
   const navigate = useNavigate(); // Initialize the navigation hook
+  const [user, loading] = useAuthState(auth);
 
   // State for form fields
   const [role, setRole] = useState("student");
@@ -24,6 +27,28 @@ export default function LoginComponent() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // Redirect if already logged in
+  useEffect(() => {
+    const checkAuth = async () => {
+      if (user && !loading) {
+        try {
+          const userDoc = await getDoc(doc(db, "users", user.uid));
+          if (userDoc.exists()) {
+            const userRole = userDoc.data().role;
+            if (userRole === "student") {
+              navigate("/StudentDashboard", { replace: true });
+            } else if (userRole === "instructor" || userRole === "admin") {
+              navigate("/dashboard", { replace: true });
+            }
+          }
+        } catch (error) {
+          console.error("Error checking auth:", error);
+        }
+      }
+    };
+    checkAuth();
+  }, [user, loading, navigate]);
 
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
@@ -43,16 +68,30 @@ export default function LoginComponent() {
         return;
       }
 
+      // Fetch user role from Firestore
+      const userDoc = await getDoc(doc(db, "users", user.uid));
+      if (!userDoc.exists()) {
+        setError("User data not found. Please contact support.");
+        setSubmitting(false);
+        return;
+      }
+
+      const userData = userDoc.data();
+      const userRole = userData.role;
+
       // Success! Store user info if needed
       console.log("Logged in user:", user);
       setSuccessMsg("Login successful! Redirecting...");
       
-      // Navigate based on role
+      // Navigate based on actual role from database
       setTimeout(() => {
-        if (role === "student") {
+        if (userRole === "student") {
           navigate("/StudentDashboard");
-        } else {
+        } else if (userRole === "instructor" || userRole === "admin") {
           navigate("/dashboard");
+        } else {
+          setError("Invalid user role. Please contact support.");
+          setSubmitting(false);
         }
       }, 1200);
       

@@ -707,22 +707,66 @@ const StatCard: React.FC<StatCardProps> = ({
 export const GenerateQrPage: React.FC = () => {
   const [qrCodeUrl, setQrCodeUrl] = useState<string>("");
   const [sessionData, setSessionData] = useState<any>(null);
-  const [className, setClassName] = useState<string>("Computer Science 101");
+  const [selectedCourse, setSelectedCourse] = useState<string>("");
+  const [className, setClassName] = useState<string>("");
   const [duration, setDuration] = useState<number>(60); // Default 1 hour in minutes
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDeployed, setIsDeployed] = useState(false);
   const [deployedAt, setDeployedAt] = useState<Date | null>(null);
   const [showEndModal, setShowEndModal] = useState(false);
   const [endVerificationCode, setEndVerificationCode] = useState("");
+  const [courses, setCourses] = useState<string[]>([]);
+  const [isLoadingCourses, setIsLoadingCourses] = useState(true);
+
+  // Fetch instructor's courses on mount
+  useEffect(() => {
+    const fetchCourses = async () => {
+      try {
+        const { db, auth } = await import('./firebase');
+        const { doc, getDoc } = await import('firebase/firestore');
+        const user = auth.currentUser;
+        
+        if (user) {
+          const courseDoc = await getDoc(doc(db, 'instructorCourses', user.uid));
+          if (courseDoc.exists()) {
+            const fetchedCourses = courseDoc.data().courses || [];
+            setCourses(fetchedCourses);
+            // Set first course as default if available
+            if (fetchedCourses.length > 0) {
+              setSelectedCourse(fetchedCourses[0]);
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching courses:", error);
+      } finally {
+        setIsLoadingCourses(false);
+      }
+    };
+
+    fetchCourses();
+  }, []);
 
   const generateQRCode = async () => {
+    if (!selectedCourse) {
+      alert("Please select a course first");
+      return;
+    }
+    if (!className.trim()) {
+      alert("Please enter a class name");
+      return;
+    }
+
     setIsGenerating(true);
     try {
       // Import the service dynamically to avoid import issues
       const { generateQRCodeData } = await import('./services/attendanceService');
       
+      // Combine course and class name for the full class identifier
+      const fullClassName = `${selectedCourse} - ${className}`;
+      
       // Generate QR code data
-      const qrData = await generateQRCodeData(className, duration);
+      const qrData = await generateQRCodeData(fullClassName, duration);
       setSessionData(qrData);
 
       // Generate QR code image
@@ -746,13 +790,25 @@ export const GenerateQrPage: React.FC = () => {
   };
 
   const handleDeploy = async () => {
+    if (!selectedCourse) {
+      alert("Please select a course first");
+      return;
+    }
+    if (!className.trim()) {
+      alert("Please enter a class name");
+      return;
+    }
+
     // Generate new QR code with current settings first
     setIsGenerating(true);
     try {
-      console.log("Starting deployment with className:", className, "duration:", duration);
+      console.log("Starting deployment with course:", selectedCourse, "className:", className, "duration:", duration);
       
       const { generateQRCodeData } = await import('./services/attendanceService');
-      const qrData = await generateQRCodeData(className, duration);
+      
+      // Combine course and class name
+      const fullClassName = `${selectedCourse} - ${className}`;
+      const qrData = await generateQRCodeData(fullClassName, duration);
       console.log("Generated QR data:", qrData);
       setSessionData(qrData);
 
@@ -830,11 +886,6 @@ export const GenerateQrPage: React.FC = () => {
     link.click();
     document.body.removeChild(link);
   };
-
-  useEffect(() => {
-    // Generate initial QR code on component mount
-    generateQRCode();
-  }, []);
 
   // Deployed View - Full Screen QR Display
   if (isDeployed) {
@@ -1009,13 +1060,44 @@ export const GenerateQrPage: React.FC = () => {
             <p className="text-xs text-center text-gray-500 mt-2">Preview</p>
           </div>
         ) : (
-          <div className="p-4 bg-gray-100 border rounded-lg w-[300px] h-[300px] flex items-center justify-center">
-            <p className="text-gray-500">Generating QR Code...</p>
+          <div className="p-4 bg-gray-100 border border-dashed border-gray-300 rounded-lg w-[300px] h-[300px] flex flex-col items-center justify-center">
+            <FaQrcode className="h-20 w-20 text-gray-300 mb-3" />
+            <p className="text-gray-500 text-sm font-medium">Select course and class name</p>
+            <p className="text-gray-400 text-xs">Then click Generate or Deploy</p>
           </div>
         )}
 
         {/* Configuration Inputs */}
         <div className="w-full space-y-4 border-t pt-4">
+          <div className="grid grid-cols-3 items-center gap-4">
+            <Label htmlFor="course-input" className="text-right">
+              Course:
+            </Label>
+            {isLoadingCourses ? (
+              <Input value="Loading..." disabled className="col-span-2" />
+            ) : courses.length > 0 ? (
+              <CustomSelect
+                id="course-input"
+                value={selectedCourse}
+                onChange={(e) => setSelectedCourse(e.target.value)}
+                className="col-span-2"
+                required
+              >
+                {courses.map((course) => (
+                  <option key={course} value={course}>
+                    {course}
+                  </option>
+                ))}
+              </CustomSelect>
+            ) : (
+              <div className="col-span-2">
+                <Input value="No courses available" disabled />
+                <p className="text-xs text-gray-500 mt-1">
+                  Add courses in Settings → Courses
+                </p>
+              </div>
+            )}
+          </div>
           <div className="grid grid-cols-3 items-center gap-4">
             <Label htmlFor="class-input" className="text-right">
               Class Name:
@@ -1025,7 +1107,7 @@ export const GenerateQrPage: React.FC = () => {
               value={className}
               onChange={(e) => setClassName(e.target.value)}
               className="col-span-2"
-              placeholder="Enter class name"
+              placeholder="e.g., Lecture 1, Midterm Review"
             />
           </div>
           <div className="grid grid-cols-3 items-center gap-4">
@@ -1055,7 +1137,7 @@ export const GenerateQrPage: React.FC = () => {
           <Button 
             className="w-full" 
             onClick={handleDeploy}
-            disabled={isGenerating || !className}
+            disabled={isGenerating || !className || !selectedCourse || courses.length === 0}
           >
             <FiRefreshCw className="mr-2 h-5 w-5" />
             Deploy QR Code (Full Screen)
@@ -1065,7 +1147,7 @@ export const GenerateQrPage: React.FC = () => {
               variant="outline"
               className="flex-1" 
               onClick={generateQRCode}
-              disabled={isGenerating}
+              disabled={isGenerating || !className || !selectedCourse || courses.length === 0}
             >
               <FiRefreshCw className="mr-2 h-4 w-4" />
               Regenerate

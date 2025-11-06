@@ -73,10 +73,15 @@ export const getInstructorAttendanceRecords = async (): Promise<AdminAttendanceR
     );
     
     const snapshot = await getDocs(allAttendanceQuery);
+    console.log("Total attendance records in database:", snapshot.size);
+    
     const records: AdminAttendanceRecord[] = [];
+    const allRecords: any[] = [];
     
     snapshot.forEach((doc) => {
       const data = doc.data();
+      allRecords.push({ id: doc.id, ...data });
+      
       // Filter by instructorId in the code (in case Firestore query has issues)
       if (data.instructorId === user.uid) {
         records.push({
@@ -93,7 +98,10 @@ export const getInstructorAttendanceRecords = async (): Promise<AdminAttendanceR
       }
     });
 
-    console.log("Found attendance records:", records.length);
+    console.log("All attendance records in DB:", allRecords);
+    console.log("Records matching instructor ID:", records.length);
+    console.log("Filtered records:", records);
+    
     return records;
   } catch (error) {
     console.error("Error getting attendance records:", error);

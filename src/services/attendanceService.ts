@@ -1,5 +1,5 @@
 import { db, auth } from '../firebase';
-import { collection, addDoc, doc, getDoc, query, where, getDocs, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, doc, getDoc, query, where, getDocs } from 'firebase/firestore';
 
 export interface QRCodeData {
   classId: string;

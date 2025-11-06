@@ -28,7 +28,7 @@ import {
   FiAlertTriangle,
 } from "react-icons/fi";
 import { FaQrcode } from "react-icons/fa";
-import { format as formatDate } from "date-fns"; // For formatting date input
+// Date formatting is done inline with native JS, no import needed
 
 // --- TYPE DEFINITIONS ---
 export interface Student {

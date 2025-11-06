@@ -5,7 +5,7 @@ type Html5QrcodeError = {
   name: string;
   message: string;
 };
-import { Video, ScanLine, XCircle, AlertTriangle } from "lucide-react";
+import { ScanLine, XCircle, AlertTriangle } from "lucide-react";
 
 interface QrScannerProps {
   onScanSuccess: (decodedText: string, result: Html5QrcodeResult) => void;

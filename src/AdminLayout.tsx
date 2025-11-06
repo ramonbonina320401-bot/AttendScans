@@ -409,9 +409,36 @@ const Topbar: React.FC<{ onMenuClick: () => void }> = ({ onMenuClick }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [recentAttendance, setRecentAttendance] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
+  const notificationRef = useRef<HTMLDivElement>(null);
   const { students, records } = useDashboard();
+
+  // Track recent attendance (last 5 minutes)
+  useEffect(() => {
+    const checkRecentAttendance = () => {
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+      const recent = records.filter(record => {
+        const scannedDate = new Date(record.date + ' ' + record.time);
+        return scannedDate > fiveMinutesAgo;
+      }).sort((a, b) => {
+        const dateA = new Date(a.date + ' ' + a.time);
+        const dateB = new Date(b.date + ' ' + b.time);
+        return dateB.getTime() - dateA.getTime();
+      }).slice(0, 10); // Get last 10
+
+      setRecentAttendance(recent);
+      setUnreadCount(recent.length);
+    };
+
+    checkRecentAttendance();
+    // Check every 30 seconds for new attendance
+    const interval = setInterval(checkRecentAttendance, 30000);
+    return () => clearInterval(interval);
+  }, [records]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -427,6 +454,12 @@ const Topbar: React.FC<{ onMenuClick: () => void }> = ({ onMenuClick }) => {
         !searchRef.current.contains(event.target as Node)
       ) {
         setShowSearchResults(false);
+      }
+      if (
+        notificationRef.current &&
+        !notificationRef.current.contains(event.target as Node)
+      ) {
+        setShowNotifications(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -560,11 +593,111 @@ const Topbar: React.FC<{ onMenuClick: () => void }> = ({ onMenuClick }) => {
               </div>
             )}
           </div>
-          <Button variant="ghost" size="icon" className="relative rounded-full">
-            <FiBell className="w-5 h-5" /> {/* ICON RESTORED */}
-            <span className="absolute top-2 right-2 block w-2 h-2 bg-red-500 rounded-full ring-2 ring-white"></span>
-            <span className="sr-only">View notifications</span>
-          </Button>
+          <div className="relative" ref={notificationRef}>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="relative rounded-full"
+              onClick={() => {
+                setShowNotifications(!showNotifications);
+                if (!showNotifications) {
+                  setUnreadCount(0); // Mark as read when opened
+                }
+              }}
+            >
+              <FiBell className="w-5 h-5" />
+              {unreadCount > 0 && (
+                <>
+                  <span className="absolute top-2 right-2 block w-2 h-2 bg-red-500 rounded-full ring-2 ring-white"></span>
+                  <span className="absolute -top-1 -right-1 flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-red-500 rounded-full">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                </>
+              )}
+              <span className="sr-only">View notifications</span>
+            </Button>
+            
+            {showNotifications && (
+              <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-white rounded-md shadow-lg border border-gray-200 max-h-[32rem] overflow-y-auto z-50">
+                <div className="p-3 border-b border-gray-200 bg-gray-50">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-gray-900">
+                      Recent Attendance
+                    </h3>
+                    {recentAttendance.length > 0 && (
+                      <span className="text-xs text-gray-500">
+                        Last 5 minutes
+                      </span>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="divide-y divide-gray-100">
+                  {recentAttendance.length > 0 ? (
+                    recentAttendance.map((record, index) => (
+                      <div
+                        key={`notification-${record.id}-${index}`}
+                        className="p-3 hover:bg-gray-50 cursor-pointer transition-colors"
+                      >
+                        <div className="flex items-start space-x-3">
+                          <div className="flex-shrink-0">
+                            <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                              <FiUsers className="w-5 h-5 text-green-600" />
+                            </div>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900">
+                              {record.name}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              {record.course} • Section {record.section}
+                            </p>
+                            {record.className && (
+                              <p className="text-xs text-gray-600 mt-1">
+                                {record.className}
+                              </p>
+                            )}
+                            <p className="text-xs text-gray-400 mt-1">
+                              {record.time} • {record.date}
+                            </p>
+                          </div>
+                          <div className="flex-shrink-0">
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              {record.status}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-8 text-center">
+                      <FiBell className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                      <p className="text-sm font-medium text-gray-900">
+                        No recent attendance
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        New attendance scans will appear here
+                      </p>
+                    </div>
+                  )}
+                </div>
+                
+                {recentAttendance.length > 0 && (
+                  <div className="p-3 border-t border-gray-200 bg-gray-50">
+                    <button
+                      onClick={() => {
+                        setShowNotifications(false);
+                        // Could navigate to attendance records page
+                      }}
+                      className="w-full text-center text-sm font-medium text-blue-600 hover:text-blue-700"
+                    >
+                      View All Attendance Records
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
           <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setDropdownOpen(!dropdownOpen)}

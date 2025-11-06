@@ -595,12 +595,37 @@ const MobileSidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
  * 1. DASHBOARD PAGE
  */
 export const DashboardPage: React.FC = () => {
-  const { stats } = useDashboard();
+  const { stats, setRecords } = useDashboard();
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [todayStats, setTodayStats] = useState({
     present: 0,
     late: 0,
     absent: 0
   });
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      const { getInstructorAttendanceRecords } = await import('./services/adminService');
+      const recordsData = await getInstructorAttendanceRecords();
+      
+      const mappedRecords: AttendanceRecord[] = recordsData.map(r => ({
+        id: r.id,
+        studentId: r.studentId,
+        name: r.studentName,
+        date: r.date,
+        time: new Date(r.scannedAt).toLocaleTimeString(),
+        status: r.status.toUpperCase() as "PRESENT" | "LATE" | "ABSENT"
+      }));
+      
+      setRecords(mappedRecords);
+      console.log("Dashboard refreshed:", mappedRecords.length, "records");
+    } catch (error) {
+      console.error("Error refreshing dashboard:", error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   useEffect(() => {
     // Calculate today's stats from total records
@@ -615,9 +640,20 @@ export const DashboardPage: React.FC = () => {
   return (
     <div className="flex flex-col gap-6">
       <Card>
-        <CardHeader>
-          <CardTitle>Overview</CardTitle>
-          <CardDescription>Today's attendance statistics</CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>Overview</CardTitle>
+            <CardDescription>Today's attendance statistics</CardDescription>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+          >
+            <FiRefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+            {isRefreshing ? 'Refreshing...' : 'Refresh'}
+          </Button>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1179,13 +1215,38 @@ export const GenerateQrPage: React.FC = () => {
  * 3. ATTENDANCE RECORDS PAGE
  */
 export const AttendanceRecordsPage: React.FC = () => {
-  const { records } = useDashboard();
+  const { records, setRecords } = useDashboard();
+  const [isRefreshing, setIsRefreshing] = useState(false);
   // We must use YYYY-MM-DD format for <input type="date">
   const [dateFrom, setDateFrom] = useState("2025-10-01");
   const [dateTo, setDateTo] = useState("2025-10-25");
 
   const courses = ["All Courses", "Computer Science", "Mathematics"];
   const sections = ["All Sections", "A", "B"];
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      const { getInstructorAttendanceRecords } = await import('./services/adminService');
+      const recordsData = await getInstructorAttendanceRecords();
+      
+      const mappedRecords: AttendanceRecord[] = recordsData.map(r => ({
+        id: r.id,
+        studentId: r.studentId,
+        name: r.studentName,
+        date: r.date,
+        time: new Date(r.scannedAt).toLocaleTimeString(),
+        status: r.status.toUpperCase() as "PRESENT" | "LATE" | "ABSENT"
+      }));
+      
+      setRecords(mappedRecords);
+      console.log("Attendance records refreshed:", mappedRecords.length);
+    } catch (error) {
+      console.error("Error refreshing attendance records:", error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const filteredRecords = useMemo(() => {
     // Add real filtering logic here based on state
@@ -1195,11 +1256,22 @@ export const AttendanceRecordsPage: React.FC = () => {
   return (
     <div className="flex flex-col gap-6">
       <Card>
-        <CardHeader>
-          <CardTitle>Attendance Records</CardTitle>
-          <CardDescription>
-            View and filter student attendance records
-          </CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>Attendance Records</CardTitle>
+            <CardDescription>
+              View and filter student attendance records
+            </CardDescription>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+          >
+            <FiRefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+            {isRefreshing ? 'Refreshing...' : 'Refresh'}
+          </Button>
         </CardHeader>
         <CardContent>
           <form className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">

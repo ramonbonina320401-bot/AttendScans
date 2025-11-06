@@ -1655,9 +1655,19 @@ export const AdminLayout: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        // Wait for auth to be ready
+        const { auth } = await import('./firebase');
+        const user = auth.currentUser;
+        
+        if (!user) {
+          console.log("No user authenticated, skipping data fetch");
+          setIsLoading(false);
+          return;
+        }
+        
         const { getAllStudents, getInstructorAttendanceRecords } = await import('./services/adminService');
         
-        console.log("Fetching dashboard data...");
+        console.log("Fetching dashboard data for user:", user.uid);
         
         // Fetch students and attendance records
         const [studentsData, recordsData] = await Promise.all([
@@ -1700,6 +1710,22 @@ export const AdminLayout: React.FC = () => {
     };
 
     fetchData();
+  }, []);
+
+  // Add auth state listener to ensure auth is ready
+  useEffect(() => {
+    const initAuth = async () => {
+      const { auth } = await import('./firebase');
+      const { onAuthStateChanged } = await import('firebase/auth');
+      
+      const unsubscribe = onAuthStateChanged(auth, (user) => {
+        console.log("Auth state changed:", user ? user.uid : "No user");
+      });
+
+      return () => unsubscribe();
+    };
+
+    initAuth();
   }, []);
 
   // Derived stats

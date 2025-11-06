@@ -1337,7 +1337,7 @@ export const GenerateQrPage: React.FC = () => {
 
   // Normal View - Configuration & Preview
   return (
-    <Card className="max-w-md mx-auto">
+    <Card className="max-w-2xl mx-auto">
       <CardHeader className="text-center">
         <FaQrcode className="mx-auto h-12 w-12 text-gray-700" />
         <CardTitle className="text-2xl pt-2">

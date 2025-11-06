@@ -809,7 +809,7 @@ export const GenerateQrPage: React.FC = () => {
       <>
         <div className="fixed inset-0 bg-white z-50 flex flex-col">
           {/* Header */}
-          <div className="bg-gray-800 text-white px-6 py-4 flex justify-between items-center">
+          <div className="bg-gray-800 text-white px-6 py-4 flex justify-between items-center flex-shrink-0">
             <div>
               <h1 className="text-2xl font-bold">{sessionData?.className}</h1>
               <p className="text-sm text-gray-300">Scan to mark attendance</p>
@@ -823,64 +823,69 @@ export const GenerateQrPage: React.FC = () => {
             </Button>
           </div>
 
-          {/* Main QR Display */}
-          <div className="flex-1 flex flex-col items-center justify-center p-8">
-            {qrCodeUrl && (
-              <>
-                <div className="bg-white p-8 rounded-2xl shadow-2xl mb-8">
-                  <img
-                    src={qrCodeUrl}
-                    alt="Attendance QR Code"
-                    className="w-full max-w-2xl"
-                    style={{ width: '600px', height: '600px' }}
-                  />
-                </div>
-                
-                {/* Session ID Display */}
-                <div className="bg-blue-50 border-2 border-blue-300 rounded-xl px-8 py-6 max-w-2xl w-full">
-                  <div className="text-center">
-                    <p className="text-sm font-medium text-blue-800 mb-2">
-                      Can't scan? Use this Session ID:
-                    </p>
-                    <div className="bg-white rounded-lg px-6 py-4 border-2 border-blue-200">
-                      <p className="text-4xl font-bold font-mono text-blue-900 tracking-wider">
-                        {sessionData?.classId?.split('-')[0]?.toUpperCase() || 'N/A'}
+          {/* Main Content - Scrollable */}
+          <div className="flex-1 overflow-y-auto">
+            <div className="flex flex-col items-center justify-start p-4 md:p-8 min-h-full">
+              {qrCodeUrl && (
+                <>
+                  {/* QR Code */}
+                  <div className="bg-white p-6 md:p-8 rounded-2xl shadow-2xl mb-6">
+                    <img
+                      src={qrCodeUrl}
+                      alt="Attendance QR Code"
+                      className="w-full max-w-lg md:max-w-xl"
+                      style={{ maxWidth: '500px', height: 'auto' }}
+                    />
+                  </div>
+                  
+                  {/* Session ID Display */}
+                  <div className="bg-blue-50 border-2 border-blue-300 rounded-xl px-6 py-5 w-full max-w-lg mb-6">
+                    <div className="text-center">
+                      <p className="text-sm font-medium text-blue-800 mb-2">
+                        📱 Can't scan? Use this Session ID:
+                      </p>
+                      <div className="bg-white rounded-lg px-6 py-4 border-2 border-blue-200">
+                        <p className="text-3xl md:text-4xl font-bold font-mono text-blue-900 tracking-wider">
+                          {sessionData?.classId?.split('-')[0]?.toUpperCase() || 'N/A'}
+                        </p>
+                      </div>
+                      <p className="text-xs text-blue-700 mt-2">
+                        Students can enter this ID manually if scanning fails
                       </p>
                     </div>
-                    <p className="text-xs text-blue-700 mt-2">
-                      Students can enter this ID manually if scanning fails
-                    </p>
                   </div>
-                </div>
-              </>
-            )}
-          </div>
 
-          {/* Footer Info */}
-          <div className="bg-gray-50 px-6 py-4 border-t">
-            <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-4 text-center">
-              <div>
-                <p className="text-xs text-gray-500">Class</p>
-                <p className="font-semibold text-gray-900">{sessionData?.className}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Deployed At</p>
-                <p className="font-semibold text-gray-900">
-                  {deployedAt?.toLocaleTimeString()}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Valid Until</p>
-                <p className="font-semibold text-gray-900">
-                  {sessionData && new Date(sessionData.expiresAt).toLocaleTimeString()}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Duration</p>
-                <p className="font-semibold text-gray-900">
-                  {duration >= 60 ? `${duration / 60} hour${duration > 60 ? 's' : ''}` : `${duration} min`}
-                </p>
-              </div>
+                  {/* Details Grid */}
+                  <div className="bg-gray-50 rounded-xl px-6 py-5 w-full max-w-lg border border-gray-200">
+                    <div className="grid grid-cols-2 gap-4 text-center">
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Deployed At</p>
+                        <p className="font-semibold text-gray-900">
+                          {deployedAt?.toLocaleTimeString()}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Valid Until</p>
+                        <p className="font-semibold text-gray-900">
+                          {sessionData && new Date(sessionData.expiresAt).toLocaleTimeString()}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Duration</p>
+                        <p className="font-semibold text-gray-900">
+                          {duration >= 60 ? `${duration / 60} hour${duration > 60 ? 's' : ''}` : `${duration} min`}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Date</p>
+                        <p className="font-semibold text-gray-900">
+                          {sessionData?.date}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>

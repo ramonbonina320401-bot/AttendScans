@@ -1847,23 +1847,45 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
     setFormData((prev) => ({ ...prev, [id]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (isEditMode && student) {
-      // Edit logic
-      setStudents((prev) =>
-        prev.map((s) => (s.id === student.id ? { ...student, ...formData } : s))
-      );
-    } else {
-      // Add logic
-      const newStudent: Student = {
-        id: `STU${String(Math.floor(Math.random() * 900) + 100)}`, // Simple random ID
-        ...formData,
-      };
-      setStudents((prev) => [...prev, newStudent]);
+    try {
+      if (isEditMode && student) {
+        // Edit logic - update in Firestore
+        const { updateStudent } = await import('./services/adminService');
+        const result = await updateStudent(student.id, formData);
+        
+        if (result.success) {
+          // Update local state
+          setStudents((prev) =>
+            prev.map((s) => (s.id === student.id ? { ...student, ...formData } : s))
+          );
+          onClose();
+        } else {
+          alert(result.message);
+        }
+      } else {
+        // Add logic - save to Firestore
+        const { addStudentToClass } = await import('./services/adminService');
+        const result = await addStudentToClass(formData);
+        
+        if (result.success) {
+          // Add to local state with the generated ID
+          const newStudent: Student = {
+            id: result.studentId || `STU${Date.now()}`,
+            ...formData,
+          };
+          setStudents((prev) => [...prev, newStudent]);
+          onClose();
+        } else {
+          alert(result.message);
+        }
+      }
+    } catch (error: any) {
+      console.error("Error saving student:", error);
+      alert(error.message || "Failed to save student");
     }
-    onClose();
   };
 
   return (
@@ -1985,10 +2007,23 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
 }) => {
   const { setStudents } = useDashboard();
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!student) return;
-    setStudents((prev) => prev.filter((s) => s.id !== student.id));
-    onClose();
+    
+    try {
+      const { removeStudent } = await import('./services/adminService');
+      const result = await removeStudent(student.id);
+      
+      if (result.success) {
+        setStudents((prev) => prev.filter((s) => s.id !== student.id));
+        onClose();
+      } else {
+        alert(result.message);
+      }
+    } catch (error: any) {
+      console.error("Error deleting student:", error);
+      alert(error.message || "Failed to delete student");
+    }
   };
 
   return (
@@ -2061,25 +2096,25 @@ export const AdminLayout: React.FC = () => {
           }
           
           // User is authenticated, fetch data
-          const { getAllStudents, getInstructorAttendanceRecords } = await import('./services/adminService');
+          const { getRegisteredStudents, getInstructorAttendanceRecords } = await import('./services/adminService');
           
           console.log("Fetching dashboard data for user:", user.uid);
           
           try {
-            // Fetch students and attendance records
+            // Fetch registered students and attendance records
             const [studentsData, recordsData] = await Promise.all([
-              getAllStudents(),
+              getRegisteredStudents(),
               getInstructorAttendanceRecords()
             ]);
 
-            console.log("Students fetched:", studentsData.length);
+            console.log("Registered students fetched:", studentsData.length);
             console.log("Attendance records fetched:", recordsData.length);
             console.log("Sample attendance record:", recordsData[0]);
 
             // Map to the Student interface format
             const mappedStudents: Student[] = studentsData.map(s => ({
               id: s.id,
-              name: `${s.firstName} ${s.lastName}`,
+              name: s.name,
               email: s.email,
               course: s.course || 'N/A',
               section: s.section || 'N/A'
@@ -2154,16 +2189,16 @@ export const AdminLayout: React.FC = () => {
   // Refresh data after student operations
   const refreshData = async () => {
     try {
-      const { getAllStudents, getInstructorAttendanceRecords } = await import('./services/adminService');
+      const { getRegisteredStudents, getInstructorAttendanceRecords } = await import('./services/adminService');
       
       const [studentsData, recordsData] = await Promise.all([
-        getAllStudents(),
+        getRegisteredStudents(),
         getInstructorAttendanceRecords()
       ]);
 
       const mappedStudents: Student[] = studentsData.map(s => ({
         id: s.id,
-        name: `${s.firstName} ${s.lastName}`,
+        name: s.name,
         email: s.email,
         course: s.course || 'N/A',
         section: s.section || 'N/A'

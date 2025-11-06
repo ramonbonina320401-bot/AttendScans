@@ -97,23 +97,25 @@ export const markAttendance = async (qrData: QRCodeData): Promise<{ success: boo
       return { success: false, message: "Student profile incomplete. Please contact administrator." };
     }
 
-    // Verify student is registered under this instructor's class
-    // Get all students registered under this instructor
-    const studentsQuery = query(
-      collection(db, 'users'),
-      where('role', '==', 'student')
-    );
-    const studentsSnapshot = await getDocs(studentsQuery);
-    
-    let isRegisteredStudent = false;
-    studentsSnapshot.forEach((doc) => {
-      if (doc.id === user.uid) {
-        isRegisteredStudent = true;
-      }
-    });
+    // Verify student email is registered in the instructor's student list
+    const studentEmail = user.email?.toLowerCase().trim();
+    if (!studentEmail) {
+      return { success: false, message: "No email associated with your account" };
+    }
 
-    if (!isRegisteredStudent) {
-      return { success: false, message: "You are not registered in the student management system. Contact your instructor." };
+    // Check if this student's email is registered under the instructor
+    const registeredStudentsQuery = query(
+      collection(db, 'registeredStudents'),
+      where('instructorId', '==', qrData.instructorId),
+      where('email', '==', studentEmail)
+    );
+    const registeredStudentsSnapshot = await getDocs(registeredStudentsQuery);
+
+    if (registeredStudentsSnapshot.empty) {
+      return { 
+        success: false, 
+        message: "You are not registered in this instructor's student list. Please contact your instructor to add your email to the system." 
+      };
     }
 
     // Check if already marked attendance for this class TODAY

@@ -145,10 +145,8 @@ export const getAttendanceStats = async () => {
 
 // Add student to instructor's class
 export const addStudentToClass = async (studentData: {
-  firstName: string;
-  lastName: string;
+  name: string;
   email: string;
-  studentId: string;
   course: string;
   section: string;
 }) => {
@@ -156,15 +154,21 @@ export const addStudentToClass = async (studentData: {
     const user = auth.currentUser;
     if (!user) throw new Error("User not authenticated");
 
-    // Add to users collection
-    await addDoc(collection(db, 'users'), {
-      ...studentData,
-      role: 'student',
+    // Generate student ID
+    const studentId = `STU${String(Math.floor(Math.random() * 90000) + 10000)}`;
+
+    // Add to registeredStudents collection (instructor's student list)
+    await addDoc(collection(db, 'registeredStudents'), {
+      studentId,
+      name: studentData.name,
+      email: studentData.email.toLowerCase().trim(), // Normalize email
+      course: studentData.course,
+      section: studentData.section,
       instructorId: user.uid,
       createdAt: new Date().toISOString()
     });
 
-    return { success: true, message: "Student added successfully" };
+    return { success: true, message: "Student registered successfully", studentId };
   } catch (error: any) {
     console.error("Error adding student:", error);
     return { success: false, message: error.message };
@@ -174,7 +178,7 @@ export const addStudentToClass = async (studentData: {
 // Remove student
 export const removeStudent = async (studentId: string) => {
   try {
-    await deleteDoc(doc(db, 'users', studentId));
+    await deleteDoc(doc(db, 'registeredStudents', studentId));
     return { success: true, message: "Student removed successfully" };
   } catch (error: any) {
     console.error("Error removing student:", error);
@@ -183,13 +187,44 @@ export const removeStudent = async (studentId: string) => {
 };
 
 // Update student
-export const updateStudent = async (studentId: string, studentData: Partial<AdminStudent>) => {
+export const updateStudent = async (studentId: string, studentData: { name: string; email: string; course: string; section: string }) => {
   try {
-    await updateDoc(doc(db, 'users', studentId), studentData as any);
+    await updateDoc(doc(db, 'registeredStudents', studentId), {
+      ...studentData,
+      email: studentData.email.toLowerCase().trim() // Normalize email
+    });
     return { success: true, message: "Student updated successfully" };
   } catch (error: any) {
     console.error("Error updating student:", error);
     return { success: false, message: error.message };
+  }
+};
+
+// Get instructor's registered students
+export const getRegisteredStudents = async (): Promise<any[]> => {
+  try {
+    const user = auth.currentUser;
+    if (!user) throw new Error("User not authenticated");
+
+    const studentsQuery = query(
+      collection(db, 'registeredStudents'),
+      where('instructorId', '==', user.uid)
+    );
+    
+    const snapshot = await getDocs(studentsQuery);
+    const students: any[] = [];
+    
+    snapshot.forEach((doc) => {
+      students.push({
+        id: doc.id,
+        ...doc.data()
+      });
+    });
+
+    return students;
+  } catch (error) {
+    console.error("Error getting registered students:", error);
+    throw error;
   }
 };
 

@@ -1,0 +1,47 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Users collection
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Attendance records
+    match /attendance/{recordId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.studentId;
+      allow update, delete: if request.auth != null && 
+        (request.auth.uid == resource.data.instructorId || request.auth.uid == resource.data.studentId);
+    }
+    
+    // Active sessions (QR codes)
+    match /activeSessions/{sessionId} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null;
+      allow delete: if request.auth != null;
+    }
+    
+    // Instructor courses
+    match /instructorCourses/{instructorId} {
+      allow read, write: if request.auth != null && request.auth.uid == instructorId;
+    }
+    
+    // Registered students (instructor's student list)
+    match /registeredStudents/{studentId} {
+      // Instructors can read their own students
+      allow read: if request.auth != null && resource.data.instructorId == request.auth.uid;
+      // Instructors can create/update/delete their own students
+      allow create: if request.auth != null && request.resource.data.instructorId == request.auth.uid;
+      allow update, delete: if request.auth != null && resource.data.instructorId == request.auth.uid;
+      // Students can read their own registration record
+      allow read: if request.auth != null && request.auth.token.email == resource.data.email;
+    }
+    
+    // Settings
+    match /settings/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}

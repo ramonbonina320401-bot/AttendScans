@@ -710,6 +710,10 @@ export const GenerateQrPage: React.FC = () => {
   const [className, setClassName] = useState<string>("Computer Science 101");
   const [duration, setDuration] = useState<number>(60); // Default 1 hour in minutes
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isDeployed, setIsDeployed] = useState(false);
+  const [deployedAt, setDeployedAt] = useState<Date | null>(null);
+  const [showEndModal, setShowEndModal] = useState(false);
+  const [endVerificationCode, setEndVerificationCode] = useState("");
 
   const generateQRCode = async () => {
     setIsGenerating(true);
@@ -741,6 +745,24 @@ export const GenerateQrPage: React.FC = () => {
     }
   };
 
+  const handleDeploy = async () => {
+    // Generate new QR code with current settings
+    await generateQRCode();
+    setIsDeployed(true);
+    setDeployedAt(new Date());
+  };
+
+  const handleEndDeployment = () => {
+    if (endVerificationCode.toLowerCase() === "redeploy") {
+      setIsDeployed(false);
+      setDeployedAt(null);
+      setShowEndModal(false);
+      setEndVerificationCode("");
+    } else {
+      alert("Incorrect verification code. Please type 'redeploy' to confirm.");
+    }
+  };
+
   const handleDownload = () => {
     if (!qrCodeUrl) return;
     
@@ -757,81 +779,157 @@ export const GenerateQrPage: React.FC = () => {
     generateQRCode();
   }, []);
 
+  // Deployed View - Full Screen QR Display
+  if (isDeployed) {
+    return (
+      <>
+        <div className="fixed inset-0 bg-white z-50 flex flex-col">
+          {/* Header */}
+          <div className="bg-gray-800 text-white px-6 py-4 flex justify-between items-center">
+            <div>
+              <h1 className="text-2xl font-bold">{sessionData?.className}</h1>
+              <p className="text-sm text-gray-300">Scan to mark attendance</p>
+            </div>
+            <Button 
+              variant="danger"
+              onClick={() => setShowEndModal(true)}
+            >
+              <FiX className="mr-2 h-4 w-4" />
+              End Deployment
+            </Button>
+          </div>
+
+          {/* Main QR Display */}
+          <div className="flex-1 flex flex-col items-center justify-center p-8">
+            {qrCodeUrl && (
+              <div className="bg-white p-8 rounded-2xl shadow-2xl">
+                <img
+                  src={qrCodeUrl}
+                  alt="Attendance QR Code"
+                  className="w-full max-w-2xl"
+                  style={{ width: '600px', height: '600px' }}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Footer Info */}
+          <div className="bg-gray-50 px-6 py-4 border-t">
+            <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-4 text-center">
+              <div>
+                <p className="text-xs text-gray-500">Class</p>
+                <p className="font-semibold text-gray-900">{sessionData?.className}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Deployed At</p>
+                <p className="font-semibold text-gray-900">
+                  {deployedAt?.toLocaleTimeString()}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Valid Until</p>
+                <p className="font-semibold text-gray-900">
+                  {sessionData && new Date(sessionData.expiresAt).toLocaleTimeString()}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Duration</p>
+                <p className="font-semibold text-gray-900">
+                  {duration >= 60 ? `${duration / 60} hour${duration > 60 ? 's' : ''}` : `${duration} min`}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* End Deployment Modal */}
+        <CustomModal isOpen={showEndModal} onClose={() => setShowEndModal(false)}>
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="flex-shrink-0 p-3 bg-red-100 rounded-full">
+                <FiAlertTriangle className="h-6 w-6 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">
+                  End QR Code Deployment?
+                </h3>
+                <p className="text-sm text-gray-500">
+                  This will stop students from scanning this QR code
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <p className="text-sm text-yellow-800">
+                To confirm, please type <span className="font-mono font-bold">redeploy</span> below:
+              </p>
+            </div>
+
+            <div>
+              <Label htmlFor="verify-code">Verification Code</Label>
+              <Input
+                id="verify-code"
+                type="text"
+                placeholder="Type 'redeploy' to confirm"
+                value={endVerificationCode}
+                onChange={(e) => setEndVerificationCode(e.target.value)}
+                className="mt-1"
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => {
+                  setShowEndModal(false);
+                  setEndVerificationCode("");
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                className="flex-1"
+                onClick={handleEndDeployment}
+                disabled={endVerificationCode.toLowerCase() !== "redeploy"}
+              >
+                End Deployment
+              </Button>
+            </div>
+          </div>
+        </CustomModal>
+      </>
+    );
+  }
+
+  // Normal View - Configuration & Preview
   return (
     <Card className="max-w-md mx-auto">
       <CardHeader className="text-center">
         <FaQrcode className="mx-auto h-12 w-12 text-gray-700" />
         <CardTitle className="text-2xl pt-2">
-          Daily Attendance QR Code
+          Attendance QR Code
         </CardTitle>
         <CardDescription>
-          Students scan this QR code to mark their attendance
+          Configure and deploy your attendance QR code
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col items-center gap-6">
-        {/* QR Code Display */}
+        {/* QR Code Preview */}
         {qrCodeUrl ? (
           <div className="p-4 bg-white border rounded-lg shadow-sm">
             <img
               src={qrCodeUrl}
-              alt="Attendance QR Code"
+              alt="Attendance QR Code Preview"
               width={300}
               height={300}
             />
+            <p className="text-xs text-center text-gray-500 mt-2">Preview</p>
           </div>
         ) : (
           <div className="p-4 bg-gray-100 border rounded-lg w-[300px] h-[300px] flex items-center justify-center">
             <p className="text-gray-500">Generating QR Code...</p>
-          </div>
-        )}
-
-        {/* Session Details */}
-        {sessionData && (
-          <div className="w-full space-y-4">
-            <div className="grid grid-cols-3 items-center gap-4">
-              <Label htmlFor="class-name" className="text-right">
-                Class:
-              </Label>
-              <Input
-                id="class-name"
-                value={sessionData.className}
-                readOnly
-                className="col-span-2"
-              />
-            </div>
-            <div className="grid grid-cols-3 items-center gap-4">
-              <Label htmlFor="session-id" className="text-right">
-                Session ID:
-              </Label>
-              <Input
-                id="session-id"
-                value={sessionData.classId}
-                readOnly
-                className="col-span-2 text-xs"
-              />
-            </div>
-            <div className="grid grid-cols-3 items-center gap-4">
-              <Label htmlFor="valid-until" className="text-right">
-                Valid Until:
-              </Label>
-              <Input
-                id="valid-until"
-                value={new Date(sessionData.expiresAt).toLocaleTimeString()}
-                readOnly
-                className="col-span-2"
-              />
-            </div>
-            <div className="grid grid-cols-3 items-center gap-4">
-              <Label htmlFor="date" className="text-right">
-                Date:
-              </Label>
-              <Input
-                id="date"
-                value={sessionData.date}
-                readOnly
-                className="col-span-2"
-              />
-            </div>
           </div>
         )}
 
@@ -872,24 +970,42 @@ export const GenerateQrPage: React.FC = () => {
         </div>
 
         {/* Action Buttons */}
-        <div className="w-full flex flex-col sm:flex-row gap-4">
+        <div className="w-full flex flex-col gap-3">
           <Button 
-            className="flex-1" 
-            onClick={generateQRCode}
-            disabled={isGenerating}
+            className="w-full" 
+            onClick={handleDeploy}
+            disabled={isGenerating || !className}
           >
-            <FiRefreshCw className="mr-2 h-4 w-4" />
-            {isGenerating ? "Generating..." : "Generate New QR"}
+            <FiRefreshCw className="mr-2 h-5 w-5" />
+            Deploy QR Code (Full Screen)
           </Button>
-          <Button 
-            variant="outline" 
-            className="flex-1" 
-            onClick={handleDownload}
-            disabled={!qrCodeUrl}
-          >
-            <FiDownload className="mr-2 h-4 w-4" />
-            Download
-          </Button>
+          <div className="flex gap-3">
+            <Button 
+              variant="outline"
+              className="flex-1" 
+              onClick={generateQRCode}
+              disabled={isGenerating}
+            >
+              <FiRefreshCw className="mr-2 h-4 w-4" />
+              Regenerate
+            </Button>
+            <Button 
+              variant="outline" 
+              className="flex-1" 
+              onClick={handleDownload}
+              disabled={!qrCodeUrl}
+            >
+              <FiDownload className="mr-2 h-4 w-4" />
+              Download
+            </Button>
+          </div>
+        </div>
+
+        {/* Info Card */}
+        <div className="w-full bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <p className="text-xs text-blue-800">
+            <strong>💡 Tip:</strong> Click "Deploy QR Code" to show a large, full-screen QR code that students can easily scan. The validity timer starts when you deploy.
+          </p>
         </div>
       </CardContent>
     </Card>

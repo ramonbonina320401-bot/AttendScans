@@ -1368,6 +1368,77 @@ export const StudentManagementPage: React.FC = () => {
  * 5. SETTINGS PAGE
  */
 export const SettingsPage: React.FC = () => {
+  const [courses, setCourses] = useState<string[]>([]);
+  const [newCourse, setNewCourse] = useState("");
+  const [isLoadingCourses, setIsLoadingCourses] = useState(true);
+
+  // Fetch courses on mount
+  useEffect(() => {
+    const fetchCourses = async () => {
+      try {
+        const { db, auth } = await import('./firebase');
+        const { doc, getDoc } = await import('firebase/firestore');
+        const user = auth.currentUser;
+        
+        if (user) {
+          const courseDoc = await getDoc(doc(db, 'instructorCourses', user.uid));
+          if (courseDoc.exists()) {
+            setCourses(courseDoc.data().courses || []);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching courses:", error);
+      } finally {
+        setIsLoadingCourses(false);
+      }
+    };
+
+    fetchCourses();
+  }, []);
+
+  const handleAddCourse = async () => {
+    if (!newCourse.trim()) return;
+    
+    try {
+      const { db, auth } = await import('./firebase');
+      const { doc, setDoc } = await import('firebase/firestore');
+      const user = auth.currentUser;
+      
+      if (user) {
+        const updatedCourses = [...courses, newCourse.trim()];
+        await setDoc(doc(db, 'instructorCourses', user.uid), {
+          courses: updatedCourses,
+          updatedAt: new Date().toISOString()
+        });
+        setCourses(updatedCourses);
+        setNewCourse("");
+      }
+    } catch (error) {
+      console.error("Error adding course:", error);
+      alert("Failed to add course. Please try again.");
+    }
+  };
+
+  const handleDeleteCourse = async (courseToDelete: string) => {
+    try {
+      const { db, auth } = await import('./firebase');
+      const { doc, setDoc } = await import('firebase/firestore');
+      const user = auth.currentUser;
+      
+      if (user) {
+        const updatedCourses = courses.filter(c => c !== courseToDelete);
+        await setDoc(doc(db, 'instructorCourses', user.uid), {
+          courses: updatedCourses,
+          updatedAt: new Date().toISOString()
+        });
+        setCourses(updatedCourses);
+      }
+    } catch (error) {
+      console.error("Error deleting course:", error);
+      alert("Failed to delete course. Please try again.");
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     // Save logic here
@@ -1386,6 +1457,7 @@ export const SettingsPage: React.FC = () => {
         <CustomTabs defaultValue="general">
           <TabsList>
             <TabsTrigger value="general">General</TabsTrigger>
+            <TabsTrigger value="courses">Courses</TabsTrigger>
             <TabsTrigger value="attendance">Attendance</TabsTrigger>
             <TabsTrigger value="admin">Admin Account</TabsTrigger>
           </TabsList>
@@ -1396,7 +1468,8 @@ export const SettingsPage: React.FC = () => {
                 <Label htmlFor="system-name">
                   System Name <span className="text-red-500">*</span>
                 </Label>
-                <Input id="system-name" defaultValue="AttendScan" required />
+                <Input id="system-name" defaultValue="AttendScan" required disabled className="bg-gray-100" />
+                <p className="text-xs text-gray-500">System name is locked and cannot be changed</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="university-name">
@@ -1410,6 +1483,61 @@ export const SettingsPage: React.FC = () => {
               </div>
               <Button type="submit">Save Changes</Button>
             </form>
+          </TabsContent>
+
+          <TabsContent value="courses" className="pt-6">
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900 mb-3">
+                  Your Courses
+                </h3>
+                <p className="text-xs text-gray-500 mb-4">
+                  Add courses that you teach. These will be available when adding students.
+                </p>
+                
+                {/* Add Course Form */}
+                <div className="flex gap-2 mb-4">
+                  <Input
+                    placeholder="e.g., Computer Science 101"
+                    value={newCourse}
+                    onChange={(e) => setNewCourse(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddCourse())}
+                  />
+                  <Button type="button" onClick={handleAddCourse} disabled={!newCourse.trim()}>
+                    <FiPlus className="mr-2 h-4 w-4" />
+                    Add
+                  </Button>
+                </div>
+
+                {/* Courses List */}
+                {isLoadingCourses ? (
+                  <p className="text-sm text-gray-500">Loading courses...</p>
+                ) : courses.length > 0 ? (
+                  <div className="space-y-2">
+                    {courses.map((course, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200"
+                      >
+                        <span className="text-sm font-medium text-gray-900">{course}</span>
+                        <button
+                          onClick={() => handleDeleteCourse(course)}
+                          className="text-red-600 hover:text-red-700 p-1"
+                          title="Delete course"
+                        >
+                          <FiTrash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 bg-gray-50 rounded-lg border border-gray-200">
+                    <p className="text-sm text-gray-500">No courses added yet</p>
+                    <p className="text-xs text-gray-400 mt-1">Add your first course above</p>
+                  </div>
+                )}
+              </div>
+            </div>
           </TabsContent>
 
           <TabsContent value="attendance" className="pt-6">
@@ -1472,8 +1600,36 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
     course: "",
     section: "",
   });
+  const [courses, setCourses] = useState<string[]>([]);
+  const [isLoadingCourses, setIsLoadingCourses] = useState(true);
 
   const isEditMode = !!student;
+
+  // Fetch instructor's courses
+  useEffect(() => {
+    const fetchCourses = async () => {
+      try {
+        const { db, auth } = await import('./firebase');
+        const { doc, getDoc } = await import('firebase/firestore');
+        const user = auth.currentUser;
+        
+        if (user) {
+          const courseDoc = await getDoc(doc(db, 'instructorCourses', user.uid));
+          if (courseDoc.exists()) {
+            setCourses(courseDoc.data().courses || []);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching courses:", error);
+      } finally {
+        setIsLoadingCourses(false);
+      }
+    };
+
+    if (isOpen) {
+      fetchCourses();
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (student && isOpen) {
@@ -1542,17 +1698,30 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
         </div>
         <div>
           <Label htmlFor="course">Course</Label>
-          <CustomSelect
-            id="course"
-            value={formData.course}
-            onChange={handleChange}
-            required
-          >
-            <option value="">Select a course</option>
-            <option value="Computer Science">Computer Science</option>
-            <option value="Mathematics">Mathematics</option>
-            <option value="Engineering">Engineering</option>
-          </CustomSelect>
+          {isLoadingCourses ? (
+            <Input value="Loading courses..." disabled />
+          ) : courses.length > 0 ? (
+            <CustomSelect
+              id="course"
+              value={formData.course}
+              onChange={handleChange}
+              required
+            >
+              <option value="">Select a course</option>
+              {courses.map((course) => (
+                <option key={course} value={course}>
+                  {course}
+                </option>
+              ))}
+            </CustomSelect>
+          ) : (
+            <div>
+              <Input value="No courses available" disabled />
+              <p className="text-xs text-gray-500 mt-1">
+                Please add courses in Settings → Courses first
+              </p>
+            </div>
+          )}
         </div>
         <div>
           <Label htmlFor="section">Section</Label>

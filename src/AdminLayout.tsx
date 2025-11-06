@@ -1368,18 +1368,18 @@ export const GenerateQrPage: React.FC = () => {
 
         {/* Configuration Inputs */}
         <div className="w-full space-y-4 border-t pt-4">
-          <div className="grid grid-cols-3 items-center gap-4">
+          <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="course-input" className="text-right">
               Course & Section:
             </Label>
             {isLoadingCourses ? (
-              <Input value="Loading..." disabled className="col-span-2" />
+              <Input value="Loading..." disabled className="col-span-3" />
             ) : courseSections.length > 0 ? (
               <CustomSelect
                 id="course-input"
                 value={selectedCourseSection}
                 onChange={(e) => setSelectedCourseSection(e.target.value)}
-                className="col-span-2"
+                className="col-span-3"
                 required
               >
                 {courseSections.map((cs) => {
@@ -1392,7 +1392,7 @@ export const GenerateQrPage: React.FC = () => {
                 })}
               </CustomSelect>
             ) : (
-              <div className="col-span-2">
+              <div className="col-span-3">
                 <Input value="No courses available" disabled />
                 <p className="text-xs text-gray-500 mt-1">
                   Add course-sections in Settings → Courses
@@ -1400,7 +1400,7 @@ export const GenerateQrPage: React.FC = () => {
               </div>
             )}
           </div>
-          <div className="grid grid-cols-3 items-center gap-4">
+          <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="class-input" className="text-right">
               Class Name:
             </Label>
@@ -1408,11 +1408,11 @@ export const GenerateQrPage: React.FC = () => {
               id="class-input"
               value={className}
               onChange={(e) => setClassName(e.target.value)}
-              className="col-span-2"
+              className="col-span-3"
               placeholder="e.g., Lecture 1, Midterm Review"
             />
           </div>
-          <div className="grid grid-cols-3 items-center gap-4">
+          <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="duration-input" className="text-right">
               Duration:
             </Label>
@@ -1420,7 +1420,7 @@ export const GenerateQrPage: React.FC = () => {
               id="duration-input"
               value={duration.toString()}
               onChange={(e) => setDuration(Number(e.target.value))}
-              className="col-span-2"
+              className="col-span-3"
             >
               <option value="15">15 minutes</option>
               <option value="30">30 minutes</option>

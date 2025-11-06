@@ -75,16 +75,18 @@ export const markAttendance = async (qrData: QRCodeData): Promise<{ success: boo
       return { success: false, message: "Only students can mark attendance" };
     }
 
-    // Check if already marked attendance for this class session
+    // Check if already marked attendance for this class TODAY
+    // Changed from checking specific classId to checking className + date
     const attendanceQuery = query(
       collection(db, 'attendance'),
       where('studentId', '==', user.uid),
-      where('classId', '==', qrData.classId)
+      where('className', '==', qrData.className),
+      where('date', '==', qrData.date)
     );
     const existingAttendance = await getDocs(attendanceQuery);
 
     if (!existingAttendance.empty) {
-      return { success: false, message: "Attendance already marked for this session" };
+      return { success: false, message: `Attendance already marked for ${qrData.className} today` };
     }
 
     // Create attendance record

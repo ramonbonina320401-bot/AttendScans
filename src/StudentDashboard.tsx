@@ -32,6 +32,7 @@ const StudentDashboard: React.FC = () => {
   const [studentName, setStudentName] = useState<string>("Student");
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isProcessing, setIsProcessing] = useState(false); // Prevent multiple scans
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // navigation
@@ -78,7 +79,14 @@ const StudentDashboard: React.FC = () => {
   // --- Handlers ---
 
   const handleScanSuccess = async (decodedText: string) => {
+    // Prevent processing if already processing
+    if (isProcessing) {
+      console.log("Already processing a scan, ignoring...");
+      return;
+    }
+
     console.log("Scanned QR Code:", decodedText);
+    setIsProcessing(true);
     
     try {
       // Parse the QR code data
@@ -97,15 +105,29 @@ const StudentDashboard: React.FC = () => {
         const records = await getStudentAttendance();
         setAttendanceRecords(records);
         
-        alert(`✅ ${result.message}\nClass: ${qrData.className}`);
+        // Show success message in UI instead of alert
+        setScanError(`✅ Success! Attendance marked for ${qrData.className}`);
+        
+        // Clear success message after 5 seconds
+        setTimeout(() => {
+          setScanError(null);
+        }, 5000);
       } else {
-        setScanError(result.message);
-        alert(`❌ ${result.message}`);
+        setScanError(`❌ ${result.message}`);
+        // Clear error after 5 seconds
+        setTimeout(() => {
+          setScanError(null);
+        }, 5000);
       }
     } catch (err: any) {
       console.error("Error processing QR code:", err);
-      setScanError("Invalid QR code format. Please scan a valid attendance QR code.");
-      alert("❌ Invalid QR code. Please scan the attendance QR code from your instructor.");
+      setScanError("❌ Invalid QR code format. Please scan a valid attendance QR code.");
+      // Clear error after 5 seconds
+      setTimeout(() => {
+        setScanError(null);
+      }, 5000);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -296,14 +318,21 @@ const StudentDashboard: React.FC = () => {
               )}
             </div>
 
-            {/* --- Error Message --- */}
+            {/* --- Status Message --- */}
             {scanError && (
               <div
-                className="flex items-center p-4 mb-4 text-sm text-red-800 rounded-lg bg-red-50"
+                className={`flex items-center p-4 mb-4 text-sm rounded-lg ${
+                  scanError.startsWith('✅') 
+                    ? 'text-green-800 bg-green-50' 
+                    : 'text-red-800 bg-red-50'
+                }`}
                 role="alert"
               >
-                <AlertTriangle className="flex-shrink-0 inline w-4 h-4 mr-3" />
-                <span className="sr-only">Error</span>
+                {scanError.startsWith('✅') ? (
+                  <CheckCircle className="flex-shrink-0 inline w-4 h-4 mr-3" />
+                ) : (
+                  <AlertTriangle className="flex-shrink-0 inline w-4 h-4 mr-3" />
+                )}
                 <div>{scanError}</div>
               </div>
             )}

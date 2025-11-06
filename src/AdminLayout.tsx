@@ -749,8 +749,11 @@ export const GenerateQrPage: React.FC = () => {
     // Generate new QR code with current settings first
     setIsGenerating(true);
     try {
+      console.log("Starting deployment with className:", className, "duration:", duration);
+      
       const { generateQRCodeData } = await import('./services/attendanceService');
       const qrData = await generateQRCodeData(className, duration);
+      console.log("Generated QR data:", qrData);
       setSessionData(qrData);
 
       // Generate QR code image
@@ -764,6 +767,7 @@ export const GenerateQrPage: React.FC = () => {
         }
       });
       
+      console.log("QR code image generated");
       setQrCodeUrl(qrImageUrl);
     
       // Save active session to Firestore with sessionId
@@ -771,26 +775,35 @@ export const GenerateQrPage: React.FC = () => {
       const { db, auth } = await import('./firebase');
       const user = auth.currentUser;
       
-      if (user && qrData) {
-        await addDoc(collection(db, 'activeSessions'), {
-          sessionId: qrData.sessionId, // Store the unique session ID
-          classId: qrData.classId,
-          className: qrData.className,
-          instructorId: user.uid,
-          instructorName: qrData.instructorName,
-          timestamp: qrData.timestamp,
-          expiresAt: qrData.expiresAt,
-          date: qrData.date,
-          deployedAt: new Date().toISOString()
-        });
-        console.log("Active session saved to Firestore with sessionId:", qrData.sessionId);
+      if (!user) {
+        throw new Error("User not authenticated");
       }
+      
+      if (!qrData) {
+        throw new Error("QR data not generated");
+      }
+      
+      console.log("Saving to Firestore...");
+      await addDoc(collection(db, 'activeSessions'), {
+        sessionId: qrData.sessionId, // Store the unique session ID
+        classId: qrData.classId,
+        className: qrData.className,
+        instructorId: user.uid,
+        instructorName: qrData.instructorName,
+        timestamp: qrData.timestamp,
+        expiresAt: qrData.expiresAt,
+        date: qrData.date,
+        deployedAt: new Date().toISOString()
+      });
+      console.log("Active session saved to Firestore with sessionId:", qrData.sessionId);
       
       setIsDeployed(true);
       setDeployedAt(new Date());
-    } catch (error) {
+      console.log("Deployment successful!");
+    } catch (error: any) {
       console.error("Error deploying QR code:", error);
-      alert("Failed to deploy QR code. Please try again.");
+      console.error("Error details:", error.message, error.stack);
+      alert(`Failed to deploy QR code: ${error.message || 'Unknown error'}. Please try again.`);
     } finally {
       setIsGenerating(false);
     }

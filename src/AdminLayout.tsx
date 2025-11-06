@@ -746,34 +746,54 @@ export const GenerateQrPage: React.FC = () => {
   };
 
   const handleDeploy = async () => {
-    // Generate new QR code with current settings
-    await generateQRCode();
-    
-    // Save active session to Firestore
+    // Generate new QR code with current settings first
+    setIsGenerating(true);
     try {
+      const { generateQRCodeData } = await import('./services/attendanceService');
+      const qrData = await generateQRCodeData(className, duration);
+      setSessionData(qrData);
+
+      // Generate QR code image
+      const qrString = JSON.stringify(qrData);
+      const qrImageUrl = await QRCode.toDataURL(qrString, {
+        width: 300,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        }
+      });
+      
+      setQrCodeUrl(qrImageUrl);
+    
+      // Save active session to Firestore with sessionId
       const { collection, addDoc } = await import('firebase/firestore');
       const { db, auth } = await import('./firebase');
       const user = auth.currentUser;
       
-      if (user && sessionData) {
+      if (user && qrData) {
         await addDoc(collection(db, 'activeSessions'), {
-          classId: sessionData.classId,
-          className: sessionData.className,
+          sessionId: qrData.sessionId, // Store the unique session ID
+          classId: qrData.classId,
+          className: qrData.className,
           instructorId: user.uid,
-          instructorName: sessionData.instructorName,
-          timestamp: sessionData.timestamp,
-          expiresAt: sessionData.expiresAt,
-          date: sessionData.date,
+          instructorName: qrData.instructorName,
+          timestamp: qrData.timestamp,
+          expiresAt: qrData.expiresAt,
+          date: qrData.date,
           deployedAt: new Date().toISOString()
         });
-        console.log("Active session saved to Firestore");
+        console.log("Active session saved to Firestore with sessionId:", qrData.sessionId);
       }
+      
+      setIsDeployed(true);
+      setDeployedAt(new Date());
     } catch (error) {
-      console.error("Error saving active session:", error);
+      console.error("Error deploying QR code:", error);
+      alert("Failed to deploy QR code. Please try again.");
+    } finally {
+      setIsGenerating(false);
     }
-    
-    setIsDeployed(true);
-    setDeployedAt(new Date());
   };
 
   const handleEndDeployment = () => {
@@ -846,11 +866,11 @@ export const GenerateQrPage: React.FC = () => {
                       </p>
                       <div className="bg-white rounded-lg px-6 py-4 border-2 border-blue-200">
                         <p className="text-3xl md:text-4xl font-bold font-mono text-blue-900 tracking-wider">
-                          {sessionData?.classId?.split('-')[0]?.toUpperCase() || 'N/A'}
+                          {sessionData?.sessionId || 'N/A'}
                         </p>
                       </div>
                       <p className="text-xs text-blue-700 mt-2">
-                        Students can enter this ID manually if scanning fails
+                        Students can enter this 8-character code manually if scanning fails
                       </p>
                     </div>
                   </div>

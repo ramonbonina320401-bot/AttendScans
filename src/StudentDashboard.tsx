@@ -148,15 +148,13 @@ const StudentDashboard: React.FC = () => {
 
     try {
       // Fetch the QR data from Firestore using session ID
-      // For now, we'll simulate this - in production, you'd need to store active sessions in Firestore
-      // and fetch the QR data by classId
       const { collection, query, where, getDocs } = await import('firebase/firestore');
       const { db } = await import('./firebase');
       
-      // Try to find an active session with this classId
+      // Try to find an active session with this sessionId (8-character code)
       const sessionsQuery = query(
         collection(db, 'activeSessions'),
-        where('classId', '==', sessionId.trim())
+        where('sessionId', '==', sessionId.trim().toUpperCase())
       );
       
       const sessionsSnapshot = await getDocs(sessionsQuery);
@@ -176,7 +174,8 @@ const StudentDashboard: React.FC = () => {
         instructorName: sessionData.instructorName,
         timestamp: sessionData.timestamp,
         expiresAt: sessionData.expiresAt,
-        date: sessionData.date
+        date: sessionData.date,
+        sessionId: sessionData.sessionId
       };
 
       // Mark attendance using the service
@@ -446,15 +445,16 @@ const StudentDashboard: React.FC = () => {
                 Can't Scan? Enter Session ID
               </h3>
               <p className="text-xs text-gray-500 mb-3">
-                Ask your instructor for the Session ID displayed on screen
+                Ask your instructor for the 8-character Session ID displayed on screen
               </p>
               <div className="flex gap-2">
                 <input
                   type="text"
                   value={sessionId}
                   onChange={(e) => setSessionId(e.target.value.toUpperCase())}
-                  placeholder="Enter Session ID"
-                  className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 font-mono"
+                  placeholder="e.g., ABC12345"
+                  maxLength={8}
+                  className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 font-mono tracking-wider uppercase"
                   disabled={isProcessing}
                 />
                 <button

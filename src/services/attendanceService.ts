@@ -9,6 +9,7 @@ export interface QRCodeData {
   timestamp: string;
   expiresAt: string;
   date: string;
+  sessionId: string; // Unique 8-character alphanumeric code
 }
 
 export interface AttendanceRecord {
@@ -22,6 +23,16 @@ export interface AttendanceRecord {
   status: 'present';
 }
 
+// Generate a secure random session ID (8 characters: uppercase letters and numbers)
+const generateSessionId = (): string => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let sessionId = '';
+  for (let i = 0; i < 8; i++) {
+    sessionId += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return sessionId;
+};
+
 // Generate QR code data for a class
 export const generateQRCodeData = async (className: string, duration: number = 5): Promise<QRCodeData> => {
   const user = auth.currentUser;
@@ -33,6 +44,7 @@ export const generateQRCodeData = async (className: string, duration: number = 5
   
   const now = new Date();
   const expiresAt = new Date(now.getTime() + duration * 60000); // duration in minutes
+  const sessionId = generateSessionId(); // Generate unique 8-character code
   
   const qrData: QRCodeData = {
     classId: `${className}-${now.getTime()}`,
@@ -41,7 +53,8 @@ export const generateQRCodeData = async (className: string, duration: number = 5
     instructorName: userData?.fullName || 'Instructor',
     timestamp: now.toISOString(),
     expiresAt: expiresAt.toISOString(),
-    date: now.toLocaleDateString()
+    date: now.toLocaleDateString(),
+    sessionId
   };
 
   return qrData;
@@ -71,8 +84,36 @@ export const markAttendance = async (qrData: QRCodeData): Promise<{ success: boo
     const userDoc = await getDoc(doc(db, 'users', user.uid));
     const userData = userDoc.data();
 
-    if (userData?.role !== 'student') {
+    if (!userData) {
+      return { success: false, message: "User not found in system" };
+    }
+
+    if (userData.role !== 'student') {
       return { success: false, message: "Only students can mark attendance" };
+    }
+
+    // Check if student is registered in the system with proper student data
+    if (!userData.studentId || !userData.firstName || !userData.lastName) {
+      return { success: false, message: "Student profile incomplete. Please contact administrator." };
+    }
+
+    // Verify student is registered under this instructor's class
+    // Get all students registered under this instructor
+    const studentsQuery = query(
+      collection(db, 'users'),
+      where('role', '==', 'student')
+    );
+    const studentsSnapshot = await getDocs(studentsQuery);
+    
+    let isRegisteredStudent = false;
+    studentsSnapshot.forEach((doc) => {
+      if (doc.id === user.uid) {
+        isRegisteredStudent = true;
+      }
+    });
+
+    if (!isRegisteredStudent) {
+      return { success: false, message: "You are not registered in the student management system. Contact your instructor." };
     }
 
     // Check if already marked attendance for this class TODAY

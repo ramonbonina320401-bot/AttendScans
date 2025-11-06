@@ -241,7 +241,7 @@ const CustomSelect: React.FC<React.SelectHTMLAttributes<HTMLSelectElement>> = ({
 }) => (
   <div className="relative">
     <select
-      className={`w-full appearance-none rounded-lg border border-gray-300 px-4 py-3 pr-12 text-base font-medium text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-gray-500 ${className}`}
+      className={`w-full appearance-none rounded-lg border border-gray-300 px-4 py-3 pr-12 text-base font-medium text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-gray-500 whitespace-nowrap overflow-hidden text-ellipsis ${className}`}
       style={{ minHeight: '44px' }}
       {...props}
     >
@@ -1370,7 +1370,7 @@ export const GenerateQrPage: React.FC = () => {
         {/* Configuration Inputs */}
         <div className="w-full space-y-4 border-t pt-4">
           <div className="grid grid-cols-5 items-center gap-4">
-            <Label htmlFor="course-input" className="text-right">
+            <Label htmlFor="course-input" className="text-right whitespace-nowrap">
               Course & Section:
             </Label>
             {isLoadingCourses ? (

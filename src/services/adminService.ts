@@ -64,34 +64,41 @@ export const getInstructorAttendanceRecords = async (): Promise<AdminAttendanceR
     const user = auth.currentUser;
     if (!user) throw new Error("User not authenticated");
 
-    const attendanceQuery = query(
+    console.log("Fetching attendance for instructor:", user.uid);
+
+    // Try to get all attendance records first (for debugging)
+    const allAttendanceQuery = query(
       collection(db, 'attendance'),
-      where('instructorId', '==', user.uid),
       orderBy('scannedAt', 'desc')
     );
     
-    const snapshot = await getDocs(attendanceQuery);
+    const snapshot = await getDocs(allAttendanceQuery);
     const records: AdminAttendanceRecord[] = [];
     
     snapshot.forEach((doc) => {
       const data = doc.data();
-      records.push({
-        id: doc.id,
-        studentId: data.studentId,
-        studentName: data.studentName,
-        classId: data.classId,
-        className: data.className,
-        instructorId: data.instructorId,
-        scannedAt: data.scannedAt,
-        date: data.date,
-        status: data.status
-      });
+      // Filter by instructorId in the code (in case Firestore query has issues)
+      if (data.instructorId === user.uid) {
+        records.push({
+          id: doc.id,
+          studentId: data.studentId,
+          studentName: data.studentName,
+          classId: data.classId,
+          className: data.className,
+          instructorId: data.instructorId,
+          scannedAt: data.scannedAt,
+          date: data.date,
+          status: data.status
+        });
+      }
     });
 
+    console.log("Found attendance records:", records.length);
     return records;
   } catch (error) {
     console.error("Error getting attendance records:", error);
-    throw error;
+    // Return empty array instead of throwing to prevent UI breaks
+    return [];
   }
 };
 

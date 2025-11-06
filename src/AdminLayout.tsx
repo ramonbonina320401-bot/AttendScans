@@ -1460,11 +1460,17 @@ export const AdminLayout: React.FC = () => {
       try {
         const { getAllStudents, getInstructorAttendanceRecords } = await import('./services/adminService');
         
+        console.log("Fetching dashboard data...");
+        
         // Fetch students and attendance records
         const [studentsData, recordsData] = await Promise.all([
           getAllStudents(),
           getInstructorAttendanceRecords()
         ]);
+
+        console.log("Students fetched:", studentsData.length);
+        console.log("Attendance records fetched:", recordsData.length);
+        console.log("Sample attendance record:", recordsData[0]);
 
         // Map to the Student interface format
         const mappedStudents: Student[] = studentsData.map(s => ({
@@ -1484,6 +1490,8 @@ export const AdminLayout: React.FC = () => {
           time: new Date(r.scannedAt).toLocaleTimeString(),
           status: r.status.toUpperCase() as "PRESENT" | "LATE" | "ABSENT"
         }));
+
+        console.log("Mapped records:", mappedRecords);
 
         setStudents(mappedStudents);
         setRecords(mappedRecords);

@@ -241,7 +241,7 @@ const CustomSelect: React.FC<React.SelectHTMLAttributes<HTMLSelectElement>> = ({
 }) => (
   <div className="relative">
     <select
-      className={`w-full appearance-none rounded-lg border border-gray-300 px-4 py-3 pr-12 text-base font-medium bg-white focus:outline-none focus:ring-2 focus:ring-gray-500 overflow-visible ${className}`}
+      className={`w-full appearance-none rounded-lg border border-gray-300 px-4 py-3 pr-12 text-base font-medium text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-gray-500 ${className}`}
       style={{ minHeight: '44px' }}
       {...props}
     >

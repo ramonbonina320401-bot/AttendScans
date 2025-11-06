@@ -1369,18 +1369,16 @@ export const GenerateQrPage: React.FC = () => {
 
         {/* Configuration Inputs */}
         <div className="w-full space-y-4 border-t pt-4">
-          <div className="flex items-center gap-4">
-            <Label htmlFor="course-input" className="text-right whitespace-nowrap w-32 flex-shrink-0">
-              Course & Section:
-            </Label>
+          <div className="space-y-2">
+            <Label htmlFor="course-input">Course & Section</Label>
             {isLoadingCourses ? (
-              <Input value="Loading..." disabled className="flex-1 min-w-0" />
+              <Input value="Loading..." disabled className="w-full" />
             ) : courseSections.length > 0 ? (
               <CustomSelect
                 id="course-input"
                 value={selectedCourseSection}
                 onChange={(e) => setSelectedCourseSection(e.target.value)}
-                className="flex-1 min-w-0"
+                className="w-full"
                 required
               >
                 {courseSections.map((cs) => {
@@ -1393,7 +1391,7 @@ export const GenerateQrPage: React.FC = () => {
                 })}
               </CustomSelect>
             ) : (
-              <div className="flex-1 min-w-0">
+              <div className="w-full">
                 <Input value="No courses available" disabled />
                 <p className="text-xs text-gray-500 mt-1">
                   Add course-sections in Settings → Courses
@@ -1401,27 +1399,23 @@ export const GenerateQrPage: React.FC = () => {
               </div>
             )}
           </div>
-          <div className="flex items-center gap-4">
-            <Label htmlFor="class-input" className="text-right w-32 flex-shrink-0">
-              Class Name:
-            </Label>
+          <div className="space-y-2">
+            <Label htmlFor="class-input">Class Name</Label>
             <Input
               id="class-input"
               value={className}
               onChange={(e) => setClassName(e.target.value)}
-              className="flex-1 min-w-0"
+              className="w-full"
               placeholder="e.g., Lecture 1, Midterm Review"
             />
           </div>
-          <div className="flex items-center gap-4">
-            <Label htmlFor="duration-input" className="text-right w-32 flex-shrink-0">
-              Duration:
-            </Label>
+          <div className="space-y-2">
+            <Label htmlFor="duration-input">Duration</Label>
             <CustomSelect
               id="duration-input"
               value={duration.toString()}
               onChange={(e) => setDuration(Number(e.target.value))}
-              className="flex-1 min-w-0"
+              className="w-full"
             >
               <option value="15">15 minutes</option>
               <option value="30">30 minutes</option>

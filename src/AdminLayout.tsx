@@ -6,8 +6,10 @@ import React, {
   useEffect,
   useRef,
 } from "react";
-import { Link, NavLink, Outlet } from "react-router-dom";
+import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import QRCode from 'qrcode';
+import { auth } from "./firebase";
+import { signOut } from "firebase/auth";
 // --- react-icons imports ARE NOW INCLUDED ---
 import {
   FiHome,
@@ -406,6 +408,7 @@ TabsContent.displayName = "TabsContent";
 // --- LAYOUT COMPONENTS (Sidebar, Topbar) ---
 
 const Topbar: React.FC<{ onMenuClick: () => void }> = ({ onMenuClick }) => {
+  const navigate = useNavigate();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -417,6 +420,16 @@ const Topbar: React.FC<{ onMenuClick: () => void }> = ({ onMenuClick }) => {
   const searchRef = useRef<HTMLDivElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
   const { students, records } = useDashboard();
+
+  // Handle logout
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      navigate("/login", { replace: true });
+    } catch (error) {
+      console.error("Error signing out:", error);
+    }
+  };
 
   // Track recent attendance (last 5 minutes)
   useEffect(() => {
@@ -732,13 +745,15 @@ const Topbar: React.FC<{ onMenuClick: () => void }> = ({ onMenuClick }) => {
                   Settings
                 </Link>
                 <hr className="my-1 border-gray-200" />
-                <Link
-                  to="/login"
-                  onClick={() => setDropdownOpen(false)}
-                  className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                <button
+                  onClick={() => {
+                    setDropdownOpen(false);
+                    handleLogout();
+                  }}
+                  className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                 >
                   Sign Out
-                </Link>
+                </button>
               </div>
             )}
           </div>

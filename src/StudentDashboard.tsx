@@ -5,6 +5,7 @@ import AttendanceReport from "./AttendanceReport";
 import { markAttendance, getStudentAttendance, type QRCodeData, type AttendanceRecord } from "./services/attendanceService";
 import { auth, db } from "./firebase";
 import { doc, getDoc } from "firebase/firestore";
+import { signOut } from "firebase/auth";
 import {
   CheckCircle,
   FileText,
@@ -314,11 +315,18 @@ const StudentDashboard: React.FC = () => {
               View Report
             </button>
             <button
-              onClick={() => {
-                // stop camera if active and navigate to login
-                setIsCameraActive(false);
-                setScanError(null);
-                navigate("/login");
+              onClick={async () => {
+                try {
+                  // stop camera if active
+                  setIsCameraActive(false);
+                  setScanError(null);
+                  // Sign out from Firebase
+                  await signOut(auth);
+                  // Navigate to login
+                  navigate("/login", { replace: true });
+                } catch (error) {
+                  console.error("Error signing out:", error);
+                }
               }}
               className="flex items-center justify-center gap-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg px-3 py-2 hover:bg-gray-50"
             >

@@ -33,6 +33,7 @@ const StudentDashboard: React.FC = () => {
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false); // Prevent multiple scans
+  const [sessionId, setSessionId] = useState<string>(""); // Manual session ID entry
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // navigation
@@ -126,6 +127,81 @@ const StudentDashboard: React.FC = () => {
       setTimeout(() => {
         setScanError(null);
       }, 5000);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleManualEntry = async () => {
+    if (!sessionId.trim()) {
+      setScanError("❌ Please enter a valid Session ID");
+      setTimeout(() => setScanError(null), 3000);
+      return;
+    }
+
+    if (isProcessing) {
+      console.log("Already processing, ignoring...");
+      return;
+    }
+
+    setIsProcessing(true);
+
+    try {
+      // Fetch the QR data from Firestore using session ID
+      // For now, we'll simulate this - in production, you'd need to store active sessions in Firestore
+      // and fetch the QR data by classId
+      const { collection, query, where, getDocs } = await import('firebase/firestore');
+      const { db } = await import('./firebase');
+      
+      // Try to find an active session with this classId
+      const sessionsQuery = query(
+        collection(db, 'activeSessions'),
+        where('classId', '==', sessionId.trim())
+      );
+      
+      const sessionsSnapshot = await getDocs(sessionsQuery);
+      
+      if (sessionsSnapshot.empty) {
+        setScanError("❌ Invalid or expired Session ID. Please check with your instructor.");
+        setTimeout(() => setScanError(null), 5000);
+        setIsProcessing(false);
+        return;
+      }
+
+      const sessionData = sessionsSnapshot.docs[0].data();
+      const qrData: QRCodeData = {
+        classId: sessionData.classId,
+        className: sessionData.className,
+        instructorId: sessionData.instructorId,
+        instructorName: sessionData.instructorName,
+        timestamp: sessionData.timestamp,
+        expiresAt: sessionData.expiresAt,
+        date: sessionData.date
+      };
+
+      // Mark attendance using the service
+      const result = await markAttendance(qrData);
+      
+      if (result.success) {
+        setScanResult(`${qrData.className} - ${qrData.date}`);
+        setIsAttendanceMarked(true);
+        setIsCameraActive(false);
+        setScanError(`✅ Success! Attendance marked for ${qrData.className}`);
+        setSessionId("");
+        
+        // Refresh attendance records
+        const records = await getStudentAttendance();
+        setAttendanceRecords(records);
+        
+        setTimeout(() => setScanError(null), 5000);
+      } else {
+        setScanError(`❌ ${result.message}`);
+        setTimeout(() => setScanError(null), 5000);
+      }
+    } catch (error: any) {
+      console.error("Error with manual entry:", error);
+      setScanError("❌ Failed to mark attendance. Please try scanning the QR code instead.");
+      setTimeout(() => setScanError(null), 5000);
     } finally {
       setIsProcessing(false);
     }
@@ -361,6 +437,34 @@ const StudentDashboard: React.FC = () => {
                 <Upload size={16} className="mr-2" />
                 Upload QR Image
               </button>
+            </div>
+
+            {/* --- Manual Session ID Entry --- */}
+            <div className="mt-6 pt-6 border-t border-gray-200">
+              <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                <Clock size={16} className="text-gray-500" />
+                Can't Scan? Enter Session ID
+              </h3>
+              <p className="text-xs text-gray-500 mb-3">
+                Ask your instructor for the Session ID displayed on screen
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={sessionId}
+                  onChange={(e) => setSessionId(e.target.value.toUpperCase())}
+                  placeholder="Enter Session ID"
+                  className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 font-mono"
+                  disabled={isProcessing}
+                />
+                <button
+                  onClick={handleManualEntry}
+                  disabled={!sessionId.trim() || isProcessing}
+                  className="px-4 py-2 text-sm font-medium text-white bg-gray-900 rounded-lg hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isProcessing ? "Processing..." : "Submit"}
+                </button>
+              </div>
             </div>
           </div>
         </main>

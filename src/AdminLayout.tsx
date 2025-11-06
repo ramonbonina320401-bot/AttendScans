@@ -748,6 +748,30 @@ export const GenerateQrPage: React.FC = () => {
   const handleDeploy = async () => {
     // Generate new QR code with current settings
     await generateQRCode();
+    
+    // Save active session to Firestore
+    try {
+      const { collection, addDoc } = await import('firebase/firestore');
+      const { db, auth } = await import('./firebase');
+      const user = auth.currentUser;
+      
+      if (user && sessionData) {
+        await addDoc(collection(db, 'activeSessions'), {
+          classId: sessionData.classId,
+          className: sessionData.className,
+          instructorId: user.uid,
+          instructorName: sessionData.instructorName,
+          timestamp: sessionData.timestamp,
+          expiresAt: sessionData.expiresAt,
+          date: sessionData.date,
+          deployedAt: new Date().toISOString()
+        });
+        console.log("Active session saved to Firestore");
+      }
+    } catch (error) {
+      console.error("Error saving active session:", error);
+    }
+    
     setIsDeployed(true);
     setDeployedAt(new Date());
   };
@@ -802,14 +826,33 @@ export const GenerateQrPage: React.FC = () => {
           {/* Main QR Display */}
           <div className="flex-1 flex flex-col items-center justify-center p-8">
             {qrCodeUrl && (
-              <div className="bg-white p-8 rounded-2xl shadow-2xl">
-                <img
-                  src={qrCodeUrl}
-                  alt="Attendance QR Code"
-                  className="w-full max-w-2xl"
-                  style={{ width: '600px', height: '600px' }}
-                />
-              </div>
+              <>
+                <div className="bg-white p-8 rounded-2xl shadow-2xl mb-8">
+                  <img
+                    src={qrCodeUrl}
+                    alt="Attendance QR Code"
+                    className="w-full max-w-2xl"
+                    style={{ width: '600px', height: '600px' }}
+                  />
+                </div>
+                
+                {/* Session ID Display */}
+                <div className="bg-blue-50 border-2 border-blue-300 rounded-xl px-8 py-6 max-w-2xl w-full">
+                  <div className="text-center">
+                    <p className="text-sm font-medium text-blue-800 mb-2">
+                      Can't scan? Use this Session ID:
+                    </p>
+                    <div className="bg-white rounded-lg px-6 py-4 border-2 border-blue-200">
+                      <p className="text-4xl font-bold font-mono text-blue-900 tracking-wider">
+                        {sessionData?.classId?.split('-')[0]?.toUpperCase() || 'N/A'}
+                      </p>
+                    </div>
+                    <p className="text-xs text-blue-700 mt-2">
+                      Students can enter this ID manually if scanning fails
+                    </p>
+                  </div>
+                </div>
+              </>
             )}
           </div>
 

@@ -743,7 +743,7 @@ const StatCard: React.FC<StatCardProps> = ({
 export const GenerateQrPage: React.FC = () => {
   const [qrCodeUrl, setQrCodeUrl] = useState<string>("");
   const [sessionData, setSessionData] = useState<any>(null);
-  const [selectedCourse, setSelectedCourse] = useState<string>("");
+  const [selectedCourseSection, setSelectedCourseSection] = useState<string>("");
   const [className, setClassName] = useState<string>("");
   const [duration, setDuration] = useState<number>(60); // Default 1 hour in minutes
   const [isGenerating, setIsGenerating] = useState(false);
@@ -751,7 +751,7 @@ export const GenerateQrPage: React.FC = () => {
   const [deployedAt, setDeployedAt] = useState<Date | null>(null);
   const [showEndModal, setShowEndModal] = useState(false);
   const [endVerificationCode, setEndVerificationCode] = useState("");
-  const [courses, setCourses] = useState<string[]>([]);
+  const [courseSections, setCourseSections] = useState<CourseSection[]>([]);
   const [isLoadingCourses, setIsLoadingCourses] = useState(true);
 
   // Fetch instructor's courses on mount
@@ -765,11 +765,11 @@ export const GenerateQrPage: React.FC = () => {
         if (user) {
           const courseDoc = await getDoc(doc(db, 'instructorCourses', user.uid));
           if (courseDoc.exists()) {
-            const fetchedCourses = courseDoc.data().courses || [];
-            setCourses(fetchedCourses);
-            // Set first course as default if available
-            if (fetchedCourses.length > 0) {
-              setSelectedCourse(fetchedCourses[0]);
+            const fetchedCourseSections = courseDoc.data().courseSections || [];
+            setCourseSections(fetchedCourseSections);
+            // Set first course-section as default if available
+            if (fetchedCourseSections.length > 0) {
+              setSelectedCourseSection(`${fetchedCourseSections[0].course} - Section ${fetchedCourseSections[0].section}`);
             }
           }
         }
@@ -784,8 +784,8 @@ export const GenerateQrPage: React.FC = () => {
   }, []);
 
   const generateQRCode = async () => {
-    if (!selectedCourse) {
-      alert("Please select a course first");
+    if (!selectedCourseSection) {
+      alert("Please select a course-section first");
       return;
     }
     if (!className.trim()) {
@@ -798,8 +798,8 @@ export const GenerateQrPage: React.FC = () => {
       // Import the service dynamically to avoid import issues
       const { generateQRCodeData } = await import('./services/attendanceService');
       
-      // Combine course and class name for the full class identifier
-      const fullClassName = `${selectedCourse} - ${className}`;
+      // Combine course-section and class name for the full class identifier
+      const fullClassName = `${selectedCourseSection} - ${className}`;
       
       // Generate QR code data
       const qrData = await generateQRCodeData(fullClassName, duration);
@@ -826,8 +826,8 @@ export const GenerateQrPage: React.FC = () => {
   };
 
   const handleDeploy = async () => {
-    if (!selectedCourse) {
-      alert("Please select a course first");
+    if (!selectedCourseSection) {
+      alert("Please select a course-section first");
       return;
     }
     if (!className.trim()) {
@@ -838,12 +838,12 @@ export const GenerateQrPage: React.FC = () => {
     // Generate new QR code with current settings first
     setIsGenerating(true);
     try {
-      console.log("Starting deployment with course:", selectedCourse, "className:", className, "duration:", duration);
+      console.log("Starting deployment with course-section:", selectedCourseSection, "className:", className, "duration:", duration);
       
       const { generateQRCodeData } = await import('./services/attendanceService');
       
-      // Combine course and class name
-      const fullClassName = `${selectedCourse} - ${className}`;
+      // Combine course-section and class name
+      const fullClassName = `${selectedCourseSection} - ${className}`;
       const qrData = await generateQRCodeData(fullClassName, duration);
       console.log("Generated QR data:", qrData);
       setSessionData(qrData);
@@ -1107,29 +1107,32 @@ export const GenerateQrPage: React.FC = () => {
         <div className="w-full space-y-4 border-t pt-4">
           <div className="grid grid-cols-3 items-center gap-4">
             <Label htmlFor="course-input" className="text-right">
-              Course:
+              Course & Section:
             </Label>
             {isLoadingCourses ? (
               <Input value="Loading..." disabled className="col-span-2" />
-            ) : courses.length > 0 ? (
+            ) : courseSections.length > 0 ? (
               <CustomSelect
                 id="course-input"
-                value={selectedCourse}
-                onChange={(e) => setSelectedCourse(e.target.value)}
+                value={selectedCourseSection}
+                onChange={(e) => setSelectedCourseSection(e.target.value)}
                 className="col-span-2"
                 required
               >
-                {courses.map((course) => (
-                  <option key={course} value={course}>
-                    {course}
-                  </option>
-                ))}
+                {courseSections.map((cs) => {
+                  const displayValue = `${cs.course} - Section ${cs.section}`;
+                  return (
+                    <option key={displayValue} value={displayValue}>
+                      {displayValue}
+                    </option>
+                  );
+                })}
               </CustomSelect>
             ) : (
               <div className="col-span-2">
                 <Input value="No courses available" disabled />
                 <p className="text-xs text-gray-500 mt-1">
-                  Add courses in Settings → Courses
+                  Add course-sections in Settings → Courses
                 </p>
               </div>
             )}
@@ -1173,7 +1176,7 @@ export const GenerateQrPage: React.FC = () => {
           <Button 
             className="w-full" 
             onClick={handleDeploy}
-            disabled={isGenerating || !className || !selectedCourse || courses.length === 0}
+            disabled={isGenerating || !className || !selectedCourseSection || courseSections.length === 0}
           >
             <FiRefreshCw className="mr-2 h-5 w-5" />
             Deploy QR Code (Full Screen)
@@ -1183,7 +1186,7 @@ export const GenerateQrPage: React.FC = () => {
               variant="outline"
               className="flex-1" 
               onClick={generateQRCode}
-              disabled={isGenerating || !className || !selectedCourse || courses.length === 0}
+              disabled={isGenerating || !className || !selectedCourseSection || courseSections.length === 0}
             >
               <FiRefreshCw className="mr-2 h-4 w-4" />
               Regenerate
@@ -1521,9 +1524,16 @@ export const StudentManagementPage: React.FC = () => {
 /**
  * 5. SETTINGS PAGE
  */
+
+interface CourseSection {
+  course: string;
+  section: string;
+}
+
 export const SettingsPage: React.FC = () => {
-  const [courses, setCourses] = useState<string[]>([]);
+  const [courseSections, setCourseSections] = useState<CourseSection[]>([]);
   const [newCourse, setNewCourse] = useState("");
+  const [newSection, setNewSection] = useState("");
   const [isLoadingCourses, setIsLoadingCourses] = useState(true);
 
   // Fetch courses on mount
@@ -1537,7 +1547,7 @@ export const SettingsPage: React.FC = () => {
         if (user) {
           const courseDoc = await getDoc(doc(db, 'instructorCourses', user.uid));
           if (courseDoc.exists()) {
-            setCourses(courseDoc.data().courses || []);
+            setCourseSections(courseDoc.data().courseSections || []);
           }
         }
       } catch (error) {
@@ -1550,8 +1560,21 @@ export const SettingsPage: React.FC = () => {
     fetchCourses();
   }, []);
 
-  const handleAddCourse = async () => {
-    if (!newCourse.trim()) return;
+  const handleAddCourseSection = async () => {
+    if (!newCourse.trim() || !newSection.trim()) {
+      alert("Please enter both course and section");
+      return;
+    }
+    
+    // Check if this course-section combination already exists
+    const exists = courseSections.some(
+      cs => cs.course === newCourse.trim() && cs.section === newSection.trim()
+    );
+    
+    if (exists) {
+      alert("This course-section combination already exists");
+      return;
+    }
     
     try {
       const { db, auth } = await import('./firebase');
@@ -1559,37 +1582,43 @@ export const SettingsPage: React.FC = () => {
       const user = auth.currentUser;
       
       if (user) {
-        const updatedCourses = [...courses, newCourse.trim()];
+        const updatedCourseSections = [...courseSections, { 
+          course: newCourse.trim(), 
+          section: newSection.trim() 
+        }];
         await setDoc(doc(db, 'instructorCourses', user.uid), {
-          courses: updatedCourses,
+          courseSections: updatedCourseSections,
           updatedAt: new Date().toISOString()
         });
-        setCourses(updatedCourses);
+        setCourseSections(updatedCourseSections);
         setNewCourse("");
+        setNewSection("");
       }
     } catch (error) {
-      console.error("Error adding course:", error);
-      alert("Failed to add course. Please try again.");
+      console.error("Error adding course-section:", error);
+      alert("Failed to add course-section. Please try again.");
     }
   };
 
-  const handleDeleteCourse = async (courseToDelete: string) => {
+  const handleDeleteCourseSection = async (courseSection: CourseSection) => {
     try {
       const { db, auth } = await import('./firebase');
       const { doc, setDoc } = await import('firebase/firestore');
       const user = auth.currentUser;
       
       if (user) {
-        const updatedCourses = courses.filter(c => c !== courseToDelete);
+        const updatedCourseSections = courseSections.filter(
+          cs => !(cs.course === courseSection.course && cs.section === courseSection.section)
+        );
         await setDoc(doc(db, 'instructorCourses', user.uid), {
-          courses: updatedCourses,
+          courseSections: updatedCourseSections,
           updatedAt: new Date().toISOString()
         });
-        setCourses(updatedCourses);
+        setCourseSections(updatedCourseSections);
       }
     } catch (error) {
-      console.error("Error deleting course:", error);
-      alert("Failed to delete course. Please try again.");
+      console.error("Error deleting course-section:", error);
+      alert("Failed to delete course-section. Please try again.");
     }
   };
 
@@ -1643,41 +1672,56 @@ export const SettingsPage: React.FC = () => {
             <div className="space-y-6">
               <div>
                 <h3 className="text-sm font-semibold text-gray-900 mb-3">
-                  Your Courses
+                  Your Courses & Sections
                 </h3>
                 <p className="text-xs text-gray-500 mb-4">
-                  Add courses that you teach. These will be available when adding students.
+                  Add courses and sections that you teach. These will be available when adding students and generating QR codes.
                 </p>
                 
-                {/* Add Course Form */}
-                <div className="flex gap-2 mb-4">
+                {/* Add Course-Section Form */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-4">
                   <Input
-                    placeholder="e.g., Computer Science 101"
+                    placeholder="Course (e.g., CS101)"
                     value={newCourse}
                     onChange={(e) => setNewCourse(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddCourse())}
+                    className="md:col-span-1"
                   />
-                  <Button type="button" onClick={handleAddCourse} disabled={!newCourse.trim()}>
+                  <Input
+                    placeholder="Section (e.g., A, B, 1)"
+                    value={newSection}
+                    onChange={(e) => setNewSection(e.target.value)}
+                    className="md:col-span-1"
+                  />
+                  <Button 
+                    type="button" 
+                    onClick={handleAddCourseSection} 
+                    disabled={!newCourse.trim() || !newSection.trim()}
+                    className="md:col-span-1"
+                  >
                     <FiPlus className="mr-2 h-4 w-4" />
-                    Add
+                    Add Course-Section
                   </Button>
                 </div>
 
-                {/* Courses List */}
+                {/* Course-Sections List */}
                 {isLoadingCourses ? (
                   <p className="text-sm text-gray-500">Loading courses...</p>
-                ) : courses.length > 0 ? (
+                ) : courseSections.length > 0 ? (
                   <div className="space-y-2">
-                    {courses.map((course, index) => (
+                    {courseSections.map((cs, index) => (
                       <div
                         key={index}
                         className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200"
                       >
-                        <span className="text-sm font-medium text-gray-900">{course}</span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm font-semibold text-gray-900">{cs.course}</span>
+                          <span className="text-xs text-gray-500">•</span>
+                          <span className="text-sm text-gray-700">Section {cs.section}</span>
+                        </div>
                         <button
-                          onClick={() => handleDeleteCourse(course)}
+                          onClick={() => handleDeleteCourseSection(cs)}
                           className="text-red-600 hover:text-red-700 p-1"
-                          title="Delete course"
+                          title="Delete course-section"
                         >
                           <FiTrash2 className="h-4 w-4" />
                         </button>
@@ -1687,7 +1731,7 @@ export const SettingsPage: React.FC = () => {
                 ) : (
                   <div className="text-center py-8 bg-gray-50 rounded-lg border border-gray-200">
                     <p className="text-sm text-gray-500">No courses added yet</p>
-                    <p className="text-xs text-gray-400 mt-1">Add your first course above</p>
+                    <p className="text-xs text-gray-400 mt-1">Add your first course-section above</p>
                   </div>
                 )}
               </div>
@@ -1754,14 +1798,14 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
     course: "",
     section: "",
   });
-  const [courses, setCourses] = useState<string[]>([]);
+  const [courseSections, setCourseSections] = useState<CourseSection[]>([]);
   const [isLoadingCourses, setIsLoadingCourses] = useState(true);
 
   const isEditMode = !!student;
 
-  // Fetch instructor's courses
+  // Fetch instructor's course-sections
   useEffect(() => {
-    const fetchCourses = async () => {
+    const fetchCourseSections = async () => {
       try {
         const { db, auth } = await import('./firebase');
         const { doc, getDoc } = await import('firebase/firestore');
@@ -1770,18 +1814,21 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
         if (user) {
           const courseDoc = await getDoc(doc(db, 'instructorCourses', user.uid));
           if (courseDoc.exists()) {
-            setCourses(courseDoc.data().courses || []);
+            // Try to get courseSections first, fallback to courses for backward compatibility
+            const data = courseDoc.data();
+            const fetchedCourseSections = data.courseSections || [];
+            setCourseSections(fetchedCourseSections);
           }
         }
       } catch (error) {
-        console.error("Error fetching courses:", error);
+        console.error("Error fetching course-sections:", error);
       } finally {
         setIsLoadingCourses(false);
       }
     };
 
     if (isOpen) {
-      fetchCourses();
+      fetchCourseSections();
     }
   }, [isOpen]);
 
@@ -1854,7 +1901,7 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
           <Label htmlFor="course">Course</Label>
           {isLoadingCourses ? (
             <Input value="Loading courses..." disabled />
-          ) : courses.length > 0 ? (
+          ) : courseSections.length > 0 ? (
             <CustomSelect
               id="course"
               value={formData.course}
@@ -1862,7 +1909,8 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
               required
             >
               <option value="">Select a course</option>
-              {courses.map((course) => (
+              {/* Get unique courses from courseSections */}
+              {Array.from(new Set(courseSections.map(cs => cs.course))).map((course) => (
                 <option key={course} value={course}>
                   {course}
                 </option>
@@ -1872,24 +1920,43 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
             <div>
               <Input value="No courses available" disabled />
               <p className="text-xs text-gray-500 mt-1">
-                Please add courses in Settings → Courses first
+                Please add course-sections in Settings → Courses first
               </p>
             </div>
           )}
         </div>
         <div>
           <Label htmlFor="section">Section</Label>
-          <CustomSelect
-            id="section"
-            value={formData.section}
-            onChange={handleChange}
-            required
-          >
-            <option value="">Select a section</option>
-            <option value="A">Section A</option>
-            <option value="B">Section B</option>
-            <option value="C">Section C</option>
-          </CustomSelect>
+          {isLoadingCourses ? (
+            <Input value="Loading sections..." disabled />
+          ) : courseSections.length > 0 && formData.course ? (
+            <CustomSelect
+              id="section"
+              value={formData.section}
+              onChange={handleChange}
+              required
+            >
+              <option value="">Select a section</option>
+              {/* Filter sections based on selected course */}
+              {courseSections
+                .filter(cs => cs.course === formData.course)
+                .map((cs) => (
+                  <option key={cs.section} value={cs.section}>
+                    Section {cs.section}
+                  </option>
+                ))}
+            </CustomSelect>
+          ) : (
+            <CustomSelect
+              id="section"
+              value={formData.section}
+              onChange={handleChange}
+              required
+              disabled
+            >
+              <option value="">Select a course first</option>
+            </CustomSelect>
+          )}
         </div>
 
         <div className="flex justify-end gap-3 mt-4">

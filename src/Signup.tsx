@@ -82,6 +82,7 @@ export default function Signup() {
           !!studentFormData.lastName.trim() &&
           !!studentFormData.email.trim() &&
           !!studentFormData.studentId.trim() &&
+          /^\d{2}-\d{4}$/.test(studentFormData.studentId) &&
           !!studentFormData.password &&
           studentFormData.password.length >= 6
       );
@@ -113,10 +114,32 @@ export default function Signup() {
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
     const { name, value } = event.target;
+    
+    // Special handling for studentId to format as 00-0000
+    if (name === "studentId") {
+      // Remove all non-numeric characters
+      const numericOnly = value.replace(/\D/g, "");
+      
+      // Format as 00-0000
+      let formatted = numericOnly;
+      if (numericOnly.length > 2) {
+        formatted = `${numericOnly.slice(0, 2)}-${numericOnly.slice(2, 6)}`;
+      }
+      
+      // Limit to 7 characters (00-0000)
+      formatted = formatted.slice(0, 7);
+      
       setStudentFormData((prevData: typeof studentFormData) => ({
-      ...prevData,
-      [name]: value,
-    }));
+        ...prevData,
+        [name]: formatted,
+      }));
+    } else {
+      setStudentFormData((prevData: typeof studentFormData) => ({
+        ...prevData,
+        [name]: value,
+      }));
+    }
+    
     setErrors((prevErrors) => {
       const newErrors = { ...prevErrors };
       delete newErrors[name];
@@ -152,6 +175,8 @@ export default function Signup() {
         newErrors.email = "Email address is invalid";
       if (!studentFormData.studentId.trim())
         newErrors.studentId = "Student ID is required";
+      else if (!/^\d{2}-\d{4}$/.test(studentFormData.studentId))
+        newErrors.studentId = "Student ID must be in format: 00-0000";
       if (!studentFormData.password || studentFormData.password.length < 6)
         newErrors.password = "Password must be at least 6 characters";
     } else {
@@ -355,7 +380,8 @@ export default function Signup() {
           type="text"
           id="studentId"
           name="studentId"
-          placeholder="12345678"
+          placeholder="00-0000"
+          maxLength={7}
           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
           value={studentFormData.studentId}
           onChange={handleStudentInputChange}

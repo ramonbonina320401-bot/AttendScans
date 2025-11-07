@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { signInWithEmailAndPassword, signOut, sendPasswordResetEmail } from "firebase/auth";
 import { auth, db } from "./firebase";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { doc, getDoc } from "firebase/firestore";
@@ -27,6 +27,13 @@ export default function LoginComponent() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // State for forgot password modal
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [resetSuccess, setResetSuccess] = useState<string | null>(null);
 
   // Redirect if already logged in
   useEffect(() => {
@@ -146,6 +153,73 @@ export default function LoginComponent() {
     setStudentNum(""); // Clear student num on role change
   };
 
+  // Handle student ID input with auto-formatting
+  const handleStudentIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    
+    // Remove all non-numeric characters
+    const numericOnly = value.replace(/\D/g, "");
+    
+    // Format as 00-0000
+    let formatted = numericOnly;
+    if (numericOnly.length > 2) {
+      formatted = `${numericOnly.slice(0, 2)}-${numericOnly.slice(2, 6)}`;
+    }
+    
+    // Limit to 7 characters (00-0000)
+    formatted = formatted.slice(0, 7);
+    
+    setStudentNum(formatted);
+    setError(null); // Clear error on input change
+  };
+
+  // Handle forgot password
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetError(null);
+    setResetSuccess(null);
+    setResetLoading(true);
+
+    if (!resetEmail.trim()) {
+      setResetError("Please enter your email address.");
+      setResetLoading(false);
+      return;
+    }
+
+    if (!/\S+@\S+\.\S+/.test(resetEmail)) {
+      setResetError("Please enter a valid email address.");
+      setResetLoading(false);
+      return;
+    }
+
+    try {
+      await sendPasswordResetEmail(auth, resetEmail);
+      setResetSuccess("Password reset email sent! Check your inbox.");
+      setResetEmail("");
+      
+      // Close modal after 3 seconds
+      setTimeout(() => {
+        setShowForgotPassword(false);
+        setResetSuccess(null);
+      }, 3000);
+    } catch (err: any) {
+      console.error("Password reset error:", err);
+      
+      let errorMessage = "Failed to send reset email. Please try again.";
+      if (err.code === "auth/user-not-found") {
+        errorMessage = "No account found with this email address.";
+      } else if (err.code === "auth/invalid-email") {
+        errorMessage = "Invalid email address.";
+      } else if (err.code === "auth/too-many-requests") {
+        errorMessage = "Too many requests. Please try again later.";
+      }
+      
+      setResetError(errorMessage);
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
   return (
     <div className="bg-blue-50 min-h-screen flex items-center justify-center p-4 font-sans">
       {successMsg && <SuccessPopup message={successMsg} />}
@@ -215,8 +289,9 @@ export default function LoginComponent() {
                 id="student_num"
                 name="student_num"
                 value={studentNum}
-                onChange={(e) => setStudentNum(e.target.value)}
-                placeholder="Enter your student ID"
+                onChange={handleStudentIdChange}
+                placeholder="00-0000"
+                maxLength={7}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
                 required={role === "student"}
               />
@@ -225,12 +300,21 @@ export default function LoginComponent() {
 
           {/* Password Field (for both roles) */}
           <div className="animate-fade-in">
-            <label
-              htmlFor="password"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
-              Password
-            </label>
+            <div className="flex justify-between items-center mb-1">
+              <label
+                htmlFor="password"
+                className="block text-sm font-medium text-gray-700"
+              >
+                Password
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowForgotPassword(true)}
+                className="text-xs text-blue-600 hover:text-blue-800 hover:underline focus:outline-none"
+              >
+                Forgot Password?
+              </button>
+            </div>
             <input
               type="password"
               id="password"
@@ -271,6 +355,86 @@ export default function LoginComponent() {
           </p>
         </form>
       </div>
+
+      {/* Forgot Password Modal */}
+      {showForgotPassword && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 md:p-8 max-w-md w-full animate-fade-in-down">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold text-gray-800">Reset Password</h2>
+              <button
+                onClick={() => {
+                  setShowForgotPassword(false);
+                  setResetEmail("");
+                  setResetError(null);
+                  setResetSuccess(null);
+                }}
+                className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+            
+            <p className="text-sm text-gray-600 mb-4">
+              Enter your email address and we'll send you a link to reset your password.
+            </p>
+
+            <form onSubmit={handleForgotPassword} className="space-y-4">
+              <div>
+                <label
+                  htmlFor="reset-email"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  id="reset-email"
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  placeholder="your.email@example.com"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
+                  required
+                />
+              </div>
+
+              {resetError && (
+                <p className="text-red-500 text-sm animate-shake">
+                  {resetError}
+                </p>
+              )}
+
+              {resetSuccess && (
+                <p className="text-green-600 text-sm">
+                  {resetSuccess}
+                </p>
+              )}
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowForgotPassword(false);
+                    setResetEmail("");
+                    setResetError(null);
+                    setResetSuccess(null);
+                  }}
+                  className="flex-1 bg-gray-200 text-gray-700 py-2.5 rounded-lg hover:bg-gray-300 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={resetLoading}
+                  className="flex-1 bg-blue-600 text-white py-2.5 rounded-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {resetLoading ? "Sending..." : "Send Reset Link"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Adding simple animations */}
       <style>{`

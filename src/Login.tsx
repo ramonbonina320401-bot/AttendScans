@@ -57,6 +57,12 @@ export default function LoginComponent() {
     const checkAuth = async () => {
       if (user && !loading) {
         try {
+          // Don't auto-redirect users with unverified emails
+          if (!user.emailVerified) {
+            console.log("User logged in but email not verified, staying on login page");
+            return;
+          }
+
           const userDoc = await getDoc(doc(db, "users", user.uid));
           if (userDoc.exists()) {
             const userRole = userDoc.data().role;
@@ -185,13 +191,22 @@ export default function LoginComponent() {
       // Check if email is verified (after role check so we get the correct error first)
       if (!user.emailVerified) {
         console.log("❌ Email not verified for:", email);
-        console.log("Signing out and showing verification modal...");
-        await signOut(auth);
+        console.log("Setting up verification modal...");
+        
+        // Set modal state FIRST before signing out
         setVerificationEmail(email);
         setShowVerificationNeeded(true);
         setError("Email verification required. Please check your inbox and verify your email address.");
-        console.log("Verification modal state set to:", true);
         setSubmitting(false);
+        
+        console.log("Verification modal state set to true");
+        console.log("Now signing out...");
+        
+        // Small delay to ensure state updates, then sign out
+        await new Promise(resolve => setTimeout(resolve, 100));
+        await signOut(auth);
+        
+        console.log("User signed out, modal should be visible");
         return;
       }
       

@@ -18,7 +18,6 @@ import {
   Camera,
   Clock,
   ShieldCheck,
-  Upload,
   XCircle,
   AlertTriangle,
 } from "lucide-react";
@@ -245,10 +244,6 @@ const StudentDashboard: React.FC = () => {
     if (!errorMessage.includes("NotFoundException")) {
       setScanError(`Scan Error: ${errorMessage}`);
     }
-  };
-
-  const handleUploadButtonClick = () => {
-    fileInputRef.current?.click();
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {

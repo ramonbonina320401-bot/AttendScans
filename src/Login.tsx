@@ -184,13 +184,18 @@ export default function LoginComponent() {
 
       // Check if email is verified (after role check so we get the correct error first)
       if (!user.emailVerified) {
+        console.log("❌ Email not verified for:", email);
+        console.log("Signing out and showing verification modal...");
         await signOut(auth);
         setVerificationEmail(email);
         setShowVerificationNeeded(true);
         setError("Email verification required. Please check your inbox and verify your email address.");
+        console.log("Verification modal state set to:", true);
         setSubmitting(false);
         return;
       }
+      
+      console.log("✅ Email verified for:", email);
 
       // If logging in as a student, verify the entered student ID matches the stored record
       if (userRole === "student") {
@@ -402,6 +407,85 @@ export default function LoginComponent() {
   return (
     <div className="bg-blue-50 min-h-screen flex items-center justify-center p-4 font-sans">
       {successMsg && <SuccessPopup message={successMsg} />}
+
+      {/* Email Verification Modal - Render at top level for visibility */}
+      {showVerificationNeeded && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[9999] animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 md:p-8 max-w-md w-full animate-fade-in-down">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
+                <span className="text-2xl">📧</span>
+                Email Verification Required
+              </h2>
+              <button
+                onClick={() => {
+                  setShowVerificationNeeded(false);
+                  setVerificationMessage(null);
+                }}
+                className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p className="text-sm text-gray-700 mb-2">
+                  <strong>Your account needs email verification before you can log in.</strong>
+                </p>
+                <p className="text-sm text-gray-600">
+                  A verification email was sent to:
+                </p>
+                <p className="text-sm font-semibold text-blue-600 mt-1 break-all">
+                  {verificationEmail}
+                </p>
+              </div>
+
+              <div className="text-sm text-gray-600 space-y-2">
+                <p className="font-medium">Steps to verify:</p>
+                <ol className="list-decimal list-inside space-y-1 ml-2">
+                  <li>Check your email inbox (and spam folder)</li>
+                  <li>Click the verification link in the email</li>
+                  <li>Return here and log in again</li>
+                </ol>
+              </div>
+
+              {verificationMessage && (
+                <div className={`p-3 rounded-lg text-sm ${
+                  verificationMessage.startsWith('✅')
+                    ? 'bg-green-50 text-green-800 border border-green-200'
+                    : 'bg-red-50 text-red-800 border border-red-200'
+                }`}>
+                  {verificationMessage}
+                </div>
+              )}
+
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={handleResendVerification}
+                  disabled={isResendingVerification}
+                  className="w-full bg-blue-600 text-white py-2.5 rounded-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {isResendingVerification ? "Sending..." : "Resend Verification Email"}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowVerificationNeeded(false);
+                    setVerificationMessage(null);
+                  }}
+                  className="w-full bg-gray-200 text-gray-700 py-2.5 rounded-lg hover:bg-gray-300 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400"
+                >
+                  Close
+                </button>
+              </div>
+
+              <p className="text-xs text-gray-500 text-center">
+                💡 Tip: Check your spam folder if you don't see the email
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-6 md:p-8 transform transition-all">
         <div className="text-center mb-6">
@@ -625,85 +709,6 @@ export default function LoginComponent() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* Email Verification Needed Modal */}
-      {showVerificationNeeded && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 md:p-8 max-w-md w-full animate-fade-in-down">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
-                <span className="text-2xl">📧</span>
-                Email Verification Required
-              </h2>
-              <button
-                onClick={() => {
-                  setShowVerificationNeeded(false);
-                  setVerificationMessage(null);
-                }}
-                className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
-              >
-                ×
-              </button>
-            </div>
-            
-            <div className="space-y-4">
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <p className="text-sm text-gray-700 mb-2">
-                  <strong>Your account needs email verification before you can log in.</strong>
-                </p>
-                <p className="text-sm text-gray-600">
-                  A verification email was sent to:
-                </p>
-                <p className="text-sm font-semibold text-blue-600 mt-1">
-                  {verificationEmail}
-                </p>
-              </div>
-
-              <div className="text-sm text-gray-600 space-y-2">
-                <p className="font-medium">Steps to verify:</p>
-                <ol className="list-decimal list-inside space-y-1 ml-2">
-                  <li>Check your email inbox (and spam folder)</li>
-                  <li>Click the verification link in the email</li>
-                  <li>Return here and log in again</li>
-                </ol>
-              </div>
-
-              {verificationMessage && (
-                <div className={`p-3 rounded-lg text-sm ${
-                  verificationMessage.startsWith('✅')
-                    ? 'bg-green-50 text-green-800 border border-green-200'
-                    : 'bg-red-50 text-red-800 border border-red-200'
-                }`}>
-                  {verificationMessage}
-                </div>
-              )}
-
-              <div className="flex flex-col gap-3">
-                <button
-                  onClick={handleResendVerification}
-                  disabled={isResendingVerification}
-                  className="w-full bg-blue-600 text-white py-2.5 rounded-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                >
-                  {isResendingVerification ? "Sending..." : "Resend Verification Email"}
-                </button>
-                <button
-                  onClick={() => {
-                    setShowVerificationNeeded(false);
-                    setVerificationMessage(null);
-                  }}
-                  className="w-full bg-gray-200 text-gray-700 py-2.5 rounded-lg hover:bg-gray-300 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400"
-                >
-                  Close
-                </button>
-              </div>
-
-              <p className="text-xs text-gray-500 text-center">
-                💡 Tip: Check your spam folder if you don't see the email
-              </p>
-            </div>
           </div>
         </div>
       )}

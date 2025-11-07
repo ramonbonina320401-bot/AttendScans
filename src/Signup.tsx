@@ -62,6 +62,10 @@ export default function Signup() {
   // State for instructor access key lockout
   const [isAccessKeyLocked, setIsAccessKeyLocked] = useState(false);
   const [accessKeyLockoutTime, setAccessKeyLockoutTime] = useState(0);
+  
+  // State for email verification success modal
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [signupEmail, setSignupEmail] = useState("");
 
   // Redirect if already logged in
   useEffect(() => {
@@ -357,8 +361,9 @@ export default function Signup() {
       await setDoc(doc(db, "users", user.uid), userData);
       console.log("User data saved successfully");
 
-      alert("Signup successful! Please check your email to verify your account before logging in.");
-      navigate("/login");
+      // Show verification modal instead of alert
+      setSignupEmail(email);
+      setShowVerificationModal(true);
     } catch (err: any) {
       console.error("Signup error details:", err);
       console.error("Error code:", err.code);
@@ -713,6 +718,63 @@ export default function Signup() {
           </p>
         </div>
       </div>
+
+      {/* Email Verification Success Modal */}
+      {showVerificationModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 md:p-8 max-w-md w-full animate-fade-in">
+            <div className="text-center">
+              <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-100 mb-4">
+                <span className="text-4xl">✅</span>
+              </div>
+              
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                Account Created Successfully!
+              </h2>
+              
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                <p className="text-sm font-semibold text-gray-900 mb-2">
+                  📧 Verification Email Sent
+                </p>
+                <p className="text-sm text-gray-700">
+                  We've sent a verification email to:
+                </p>
+                <p className="text-sm font-semibold text-blue-600 mt-1">
+                  {signupEmail}
+                </p>
+              </div>
+              
+              <div className="text-left bg-gray-50 rounded-lg p-4 mb-4">
+                <p className="text-sm font-semibold text-gray-900 mb-2">
+                  ⚠️ Important: Verify Your Email Before Login
+                </p>
+                <ol className="text-sm text-gray-700 space-y-2 list-decimal list-inside">
+                  <li>Check your email inbox (and spam folder)</li>
+                  <li>Click the verification link in the email</li>
+                  <li>Return to the login page</li>
+                  <li>Sign in with your credentials</li>
+                </ol>
+              </div>
+              
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+                <p className="text-xs text-yellow-800">
+                  💡 <strong>Can't find the email?</strong> Check your spam/junk folder. If you still don't see it, you can request a new verification email from the login page.
+                </p>
+              </div>
+              
+              <button
+                onClick={() => {
+                  setShowVerificationModal(false);
+                  navigate("/login");
+                }}
+                className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 font-medium"
+              >
+                Go to Login Page
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Re-adding the style tag here for animations, just in case */}
       <style>{`

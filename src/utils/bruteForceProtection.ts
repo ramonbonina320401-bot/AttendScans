@@ -6,16 +6,27 @@ interface AttemptRecord {
   lockoutUntil: number | null;
 }
 
-const MAX_ATTEMPTS = 4;
-const LOCKOUT_DURATION = 3 * 60 * 1000; // 3 minutes in milliseconds
+type AttemptType = 'login' | 'password-change' | 'instructor-access-key';
+
+const MAX_ATTEMPTS_MAP: Record<AttemptType, number> = {
+  'login': 4,
+  'password-change': 4,
+  'instructor-access-key': 3, // 3 attempts for access key
+};
+
+const LOCKOUT_DURATION_MAP: Record<AttemptType, number> = {
+  'login': 3 * 60 * 1000, // 3 minutes
+  'password-change': 3 * 60 * 1000, // 3 minutes
+  'instructor-access-key': 10 * 60 * 1000, // 10 minutes
+};
 
 // Get attempt key based on identifier (email or user ID)
-const getAttemptKey = (identifier: string, type: 'login' | 'password-change'): string => {
+const getAttemptKey = (identifier: string, type: AttemptType): string => {
   return `attempt_${type}_${identifier.toLowerCase()}`;
 };
 
 // Get current attempt record from localStorage
-const getAttemptRecord = (identifier: string, type: 'login' | 'password-change'): AttemptRecord => {
+const getAttemptRecord = (identifier: string, type: AttemptType): AttemptRecord => {
   const key = getAttemptKey(identifier, type);
   const stored = localStorage.getItem(key);
   
@@ -31,13 +42,13 @@ const getAttemptRecord = (identifier: string, type: 'login' | 'password-change')
 };
 
 // Save attempt record to localStorage
-const saveAttemptRecord = (identifier: string, type: 'login' | 'password-change', record: AttemptRecord): void => {
+const saveAttemptRecord = (identifier: string, type: AttemptType, record: AttemptRecord): void => {
   const key = getAttemptKey(identifier, type);
   localStorage.setItem(key, JSON.stringify(record));
 };
 
 // Check if currently locked out
-export const isLockedOut = (identifier: string, type: 'login' | 'password-change' = 'login'): { locked: boolean; remainingTime: number } => {
+export const isLockedOut = (identifier: string, type: AttemptType = 'login'): { locked: boolean; remainingTime: number } => {
   if (!identifier) {
     return { locked: false, remainingTime: 0 };
   }
@@ -58,19 +69,22 @@ export const isLockedOut = (identifier: string, type: 'login' | 'password-change
 };
 
 // Record a failed attempt
-export const recordFailedAttempt = (identifier: string, type: 'login' | 'password-change' = 'login'): { locked: boolean; attemptsLeft: number; lockoutUntil: number | null } => {
+export const recordFailedAttempt = (identifier: string, type: AttemptType = 'login'): { locked: boolean; attemptsLeft: number; lockoutUntil: number | null } => {
   if (!identifier) {
-    return { locked: false, attemptsLeft: MAX_ATTEMPTS, lockoutUntil: null };
+    const maxAttempts = MAX_ATTEMPTS_MAP[type];
+    return { locked: false, attemptsLeft: maxAttempts, lockoutUntil: null };
   }
   
   const record = getAttemptRecord(identifier, type);
+  const maxAttempts = MAX_ATTEMPTS_MAP[type];
+  const lockoutDuration = LOCKOUT_DURATION_MAP[type];
   
   // Increment attempt count
   record.count += 1;
   
   // Check if we've hit the max attempts
-  if (record.count >= MAX_ATTEMPTS) {
-    record.lockoutUntil = Date.now() + LOCKOUT_DURATION;
+  if (record.count >= maxAttempts) {
+    record.lockoutUntil = Date.now() + lockoutDuration;
     saveAttemptRecord(identifier, type, record);
     return { locked: true, attemptsLeft: 0, lockoutUntil: record.lockoutUntil };
   }
@@ -80,13 +94,13 @@ export const recordFailedAttempt = (identifier: string, type: 'login' | 'passwor
   
   return { 
     locked: false, 
-    attemptsLeft: MAX_ATTEMPTS - record.count, 
+    attemptsLeft: maxAttempts - record.count, 
     lockoutUntil: null 
   };
 };
 
 // Clear attempts after successful login/action
-export const clearAttempts = (identifier: string, type: 'login' | 'password-change' = 'login'): void => {
+export const clearAttempts = (identifier: string, type: AttemptType = 'login'): void => {
   if (!identifier) return;
   
   const key = getAttemptKey(identifier, type);
@@ -94,19 +108,20 @@ export const clearAttempts = (identifier: string, type: 'login' | 'password-chan
 };
 
 // Get remaining attempts
-export const getRemainingAttempts = (identifier: string, type: 'login' | 'password-change' = 'login'): number => {
+export const getRemainingAttempts = (identifier: string, type: AttemptType = 'login'): number => {
   if (!identifier) {
-    return MAX_ATTEMPTS;
+    return MAX_ATTEMPTS_MAP[type];
   }
   
   const record = getAttemptRecord(identifier, type);
+  const maxAttempts = MAX_ATTEMPTS_MAP[type];
   
   // If locked out, return 0
   if (record.lockoutUntil && Date.now() < record.lockoutUntil) {
     return 0;
   }
   
-  return MAX_ATTEMPTS - record.count;
+  return maxAttempts - record.count;
 };
 
 // Format remaining time as MM:SS

@@ -4,6 +4,12 @@ import { createUserWithEmailAndPassword, sendEmailVerification } from "firebase/
 import { doc, setDoc, getDoc } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import { useAuthState } from "react-firebase-hooks/auth";
+import { 
+  isLockedOut, 
+  recordFailedAttempt, 
+  clearAttempts, 
+  formatRemainingTime 
+} from "./utils/bruteForceProtection";
 
 // Define interfaces for form data and errors to ensure type safety
 interface StudentFormData {
@@ -20,6 +26,7 @@ interface InstructorFormData {
   fullName: string;
   email: string;
   password: string;
+  accessKey: string;
   otp?: string;
 }
 
@@ -46,10 +53,15 @@ export default function Signup() {
       fullName: "",
       email: "",
       password: "",
+      accessKey: "",
       otp: "",
     });
 
   const [errors, setErrors] = useState<Errors>({});
+  
+  // State for instructor access key lockout
+  const [isAccessKeyLocked, setIsAccessKeyLocked] = useState(false);
+  const [accessKeyLockoutTime, setAccessKeyLockoutTime] = useState(0);
 
   // Redirect if already logged in
   useEffect(() => {
@@ -91,10 +103,46 @@ export default function Signup() {
         !!instructorFormData.fullName.trim() &&
           !!instructorFormData.email.trim() &&
           !!instructorFormData.password &&
-          instructorFormData.password.length >= 6
+          instructorFormData.password.length >= 6 &&
+          !!instructorFormData.accessKey.trim()
       );
     }
   }, [selectedRole, studentFormData, instructorFormData]);
+
+  // Monitor access key lockout status
+  useEffect(() => {
+    if (selectedRole !== "instructor") return;
+    
+    const checkLockout = () => {
+      const { locked, remainingTime } = isLockedOut('instructor-signup', 'instructor-access-key');
+      setIsAccessKeyLocked(locked);
+      setAccessKeyLockoutTime(remainingTime);
+      
+      if (!locked && errors.accessKey?.includes('locked')) {
+        setErrors(prev => {
+          const { accessKey, ...rest } = prev;
+          return rest;
+        });
+      }
+    };
+    
+    checkLockout();
+    
+    const interval = setInterval(() => {
+      const { locked, remainingTime } = isLockedOut('instructor-signup', 'instructor-access-key');
+      setIsAccessKeyLocked(locked);
+      setAccessKeyLockoutTime(remainingTime);
+      
+      if (!locked && isAccessKeyLocked) {
+        setErrors(prev => {
+          const { accessKey, ...rest } = prev;
+          return rest;
+        });
+      }
+    }, 1000);
+    
+    return () => clearInterval(interval);
+  }, [selectedRole, isAccessKeyLocked, errors.accessKey]);
 
   const handleRoleChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedRole(event.target.value);
@@ -107,7 +155,7 @@ export default function Signup() {
       studentId: "",
       password: "",
     });
-    setInstructorFormData({ fullName: "", email: "", password: "" });
+    setInstructorFormData({ fullName: "", email: "", password: "", accessKey: "" });
   };
 
   const handleStudentInputChange = (
@@ -201,6 +249,57 @@ export default function Signup() {
     if (!validateForm()) {
       console.log("Form has errors. Please correct them.");
       return;
+    }
+
+    // Validate instructor access key if role is instructor
+    if (selectedRole === "instructor") {
+      // Check if locked out
+      const lockoutCheck = isLockedOut('instructor-signup', 'instructor-access-key');
+      if (lockoutCheck.locked) {
+        setErrors(prev => ({ 
+          ...prev, 
+          accessKey: `Too many failed attempts. Please try again in ${formatRemainingTime(lockoutCheck.remainingTime)}.` 
+        }));
+        return;
+      }
+
+      // Fetch and validate the access key from Firestore
+      try {
+        const settingsDoc = await getDoc(doc(db, 'settings', 'system'));
+        const instructorAccessKey = settingsDoc.exists() 
+          ? settingsDoc.data().instructorAccessKey 
+          : 'INSTRUCTOR2024'; // Default fallback
+
+        if (instructorFormData.accessKey !== instructorAccessKey) {
+          // Record failed attempt
+          const result = recordFailedAttempt('instructor-signup', 'instructor-access-key');
+          
+          if (result.locked) {
+            setErrors(prev => ({ 
+              ...prev, 
+              accessKey: `Too many failed attempts. Access locked for 10 minutes.` 
+            }));
+            setIsAccessKeyLocked(true);
+            setAccessKeyLockoutTime(600); // 10 minutes in seconds
+          } else {
+            setErrors(prev => ({ 
+              ...prev, 
+              accessKey: `Invalid instructor access key. (${result.attemptsLeft} attempts remaining)` 
+            }));
+          }
+          return;
+        }
+
+        // Clear attempts on successful validation
+        clearAttempts('instructor-signup', 'instructor-access-key');
+      } catch (error) {
+        console.error("Error validating access key:", error);
+        setErrors(prev => ({ 
+          ...prev, 
+          accessKey: "Failed to validate access key. Please try again." 
+        }));
+        return;
+      }
     }
 
     try {
@@ -494,6 +593,45 @@ export default function Signup() {
               {errors.password}
             </p>
           )}
+        </div>
+
+        <div>
+          <label
+            htmlFor="accessKey"
+            className="block text-sm font-medium text-gray-700 mb-1"
+          >
+            Instructor Access Key <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            id="accessKey"
+            name="accessKey"
+            placeholder="Enter instructor access key"
+            className={`w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 transition-shadow ${
+              isAccessKeyLocked
+                ? 'border-red-300 bg-red-50'
+                : errors.accessKey
+                  ? 'border-red-500 focus:ring-red-500 focus:border-red-500'
+                  : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
+            }`}
+            value={instructorFormData.accessKey}
+            onChange={handleInstructorInputChange}
+            disabled={isAccessKeyLocked}
+            required
+          />
+          {errors.accessKey && (
+            <p className="text-red-500 text-sm mt-1 animate-shake">
+              {errors.accessKey}
+            </p>
+          )}
+          {isAccessKeyLocked && (
+            <p className="text-red-600 text-xs mt-1 font-medium">
+              🔒 Locked - Try again in {formatRemainingTime(accessKeyLockoutTime)}
+            </p>
+          )}
+          <p className="text-xs text-gray-500 mt-1">
+            Contact your administrator to obtain the instructor access key.
+          </p>
         </div>
       </div>
     </>

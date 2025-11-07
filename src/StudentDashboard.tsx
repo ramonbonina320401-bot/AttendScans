@@ -90,6 +90,7 @@ const StudentDashboard: React.FC = () => {
 
     console.log("Scanned QR Code:", decodedText);
     setIsProcessing(true);
+    setScanError(null); // Clear any previous errors
     
     try {
       // Parse the QR code data
@@ -101,14 +102,14 @@ const StudentDashboard: React.FC = () => {
       if (result.success) {
         setScanResult(`${qrData.className} - ${qrData.date}`);
         setIsAttendanceMarked(true);
-        setIsCameraActive(false);
+        setIsCameraActive(false); // Stop camera on success
         setScanError(null);
         
         // Refresh attendance records
         const records = await getStudentAttendance();
         setAttendanceRecords(records);
         
-        // Show success message in UI instead of alert
+        // Show success message in UI
         setScanError(`✅ Success! Attendance marked for ${qrData.className}`);
         
         // Clear success message after 5 seconds
@@ -116,6 +117,8 @@ const StudentDashboard: React.FC = () => {
           setScanError(null);
         }, 5000);
       } else {
+        // Failed validation (course/section mismatch, etc.)
+        setIsCameraActive(false); // Stop camera on validation error
         setScanError(`❌ ${result.message}`);
         // Clear error after 5 seconds
         setTimeout(() => {
@@ -124,6 +127,7 @@ const StudentDashboard: React.FC = () => {
       }
     } catch (err: any) {
       console.error("Error processing QR code:", err);
+      setIsCameraActive(false); // Stop camera on invalid QR format
       setScanError("❌ Invalid QR code format. Please scan a valid attendance QR code.");
       // Clear error after 5 seconds
       setTimeout(() => {
@@ -212,8 +216,18 @@ const StudentDashboard: React.FC = () => {
 
   const handleScanFailure = (error: any) => {
     const errorMessage = error.message || "Failed to scan QR code.";
+    
+    // Don't show "No MultiFormat Readers" errors - these are normal when camera doesn't see a QR code
+    if (errorMessage.includes("No MultiFormat Readers")) {
+      return;
+    }
+    
     console.error("QR Scan Failed:", errorMessage);
-    setScanError(`Scan Error: ${errorMessage}`);
+    
+    // Only show meaningful errors
+    if (!errorMessage.includes("NotFoundException")) {
+      setScanError(`Scan Error: ${errorMessage}`);
+    }
   };
 
   const handleUploadButtonClick = () => {

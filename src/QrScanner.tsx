@@ -10,16 +10,20 @@ import { ScanLine, XCircle, AlertTriangle } from "lucide-react";
 interface QrScannerProps {
   onScanSuccess: (decodedText: string, result: Html5QrcodeResult) => void;
   onScanFailure?: (error: Html5QrcodeError) => void;
+  shouldStopAfterScan?: boolean; // New prop to control auto-stop behavior
 }
 
 const QrScanner: React.FC<QrScannerProps> = ({
   onScanSuccess,
   onScanFailure,
+  shouldStopAfterScan = true, // Default to true
 }) => {
   const [isScanning, setIsScanning] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const scannerRegionId = "qr-code-full-region";
+  const lastErrorRef = useRef<string>("");
+  const errorCountRef = useRef<number>(0);
 
   useEffect(() => {
     // Initialize the scanner
@@ -36,14 +40,42 @@ const QrScanner: React.FC<QrScannerProps> = ({
   const startScanner = async () => {
     if (scannerRef.current && !scannerRef.current.isScanning) {
       setErrorMessage(null);
+      lastErrorRef.current = "";
+      errorCountRef.current = 0;
+      
       try {
         await scannerRef.current.start(
           { facingMode: "environment" },
           { fps: 10, qrbox: { width: 250, height: 250 } },
-          onScanSuccess,
-          (error) => {
-            if (onScanFailure) {
-              onScanFailure({ name: "ScanError", message: error });
+          (decodedText, result) => {
+            // Stop scanner immediately on successful scan if shouldStopAfterScan is true
+            if (shouldStopAfterScan) {
+              stopScanner();
+            }
+            onScanSuccess(decodedText, result);
+          },
+          (errorMsg) => {
+            // Filter out repetitive "No MultiFormat Readers" errors
+            // These are normal - they happen when the camera doesn't see a valid QR code
+            if (errorMsg.includes("No MultiFormat Readers")) {
+              // Don't show this error to user, it's expected
+              return;
+            }
+            
+            // Only report other types of errors, and avoid spam
+            if (errorMsg !== lastErrorRef.current) {
+              lastErrorRef.current = errorMsg;
+              errorCountRef.current = 1;
+              
+              if (onScanFailure) {
+                onScanFailure({ name: "ScanError", message: errorMsg });
+              }
+            } else {
+              errorCountRef.current++;
+              // Only show error if it persists
+              if (errorCountRef.current > 3 && onScanFailure) {
+                onScanFailure({ name: "ScanError", message: errorMsg });
+              }
             }
           }
         );

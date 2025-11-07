@@ -10,6 +10,12 @@ import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import QRCode from 'qrcode';
 import { auth } from "./firebase";
 import { signOut } from "firebase/auth";
+import { 
+  isLockedOut, 
+  recordFailedAttempt, 
+  clearAttempts, 
+  formatRemainingTime 
+} from "./utils/bruteForceProtection";
 // --- react-icons imports ARE NOW INCLUDED ---
 import {
   FiHome,
@@ -1952,6 +1958,16 @@ export const SettingsPage: React.FC = () => {
   const [lateThreshold, setLateThreshold] = useState<number>(15); // Late threshold in minutes
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  
+  // Admin account state
+  const [adminEmail, setAdminEmail] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+  const [isPasswordLocked, setIsPasswordLocked] = useState(false);
+  const [passwordLockoutTime, setPasswordLockoutTime] = useState(0);
 
   // Fetch courses and settings on mount
   useEffect(() => {
@@ -1962,6 +1978,9 @@ export const SettingsPage: React.FC = () => {
         const user = auth.currentUser;
         
         if (user) {
+          // Set admin email from current user
+          setAdminEmail(user.email || "");
+          
           // Fetch courses
           const courseDoc = await getDoc(doc(db, 'instructorCourses', user.uid));
           if (courseDoc.exists()) {
@@ -1985,6 +2004,35 @@ export const SettingsPage: React.FC = () => {
 
     fetchCoursesAndSettings();
   }, []);
+
+  // Monitor password change lockout status
+  useEffect(() => {
+    if (!adminEmail) return;
+    
+    const checkLockout = () => {
+      const { locked, remainingTime } = isLockedOut(adminEmail, 'password-change');
+      setIsPasswordLocked(locked);
+      setPasswordLockoutTime(remainingTime);
+      
+      if (!locked && passwordError?.includes('locked')) {
+        setPasswordError(null);
+      }
+    };
+    
+    checkLockout();
+    
+    const interval = setInterval(() => {
+      const { locked, remainingTime } = isLockedOut(adminEmail, 'password-change');
+      setIsPasswordLocked(locked);
+      setPasswordLockoutTime(remainingTime);
+      
+      if (!locked && isPasswordLocked) {
+        setPasswordError(null);
+      }
+    }, 1000);
+    
+    return () => clearInterval(interval);
+  }, [adminEmail, isPasswordLocked, passwordError]);
 
   const handleAddCourseSection = async () => {
     if (!newCourse.trim() || !newSection.trim()) {
@@ -2070,6 +2118,98 @@ export const SettingsPage: React.FC = () => {
       alert("Failed to save settings. Please try again.");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handlePasswordUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError(null);
+    
+    // Check if locked out
+    const lockoutCheck = isLockedOut(adminEmail, 'password-change');
+    if (lockoutCheck.locked) {
+      setPasswordError(`Too many failed attempts. Please try again in ${formatRemainingTime(lockoutCheck.remainingTime)}.`);
+      return;
+    }
+    
+    // Validation
+    if (!currentPassword) {
+      setPasswordError("Current password is required");
+      return;
+    }
+    
+    if (!newPassword || newPassword.length < 6) {
+      setPasswordError("New password must be at least 6 characters");
+      return;
+    }
+    
+    if (newPassword !== confirmPassword) {
+      setPasswordError("New passwords do not match");
+      return;
+    }
+    
+    setIsUpdatingPassword(true);
+    
+    try {
+      const { auth } = await import('./firebase');
+      const { EmailAuthProvider, reauthenticateWithCredential, updatePassword } = await import('firebase/auth');
+      const user = auth.currentUser;
+      
+      if (!user || !user.email) {
+        setPasswordError("No user logged in");
+        setIsUpdatingPassword(false);
+        return;
+      }
+      
+      // Re-authenticate user with current password
+      const credential = EmailAuthProvider.credential(user.email, currentPassword);
+      
+      try {
+        await reauthenticateWithCredential(user, credential);
+      } catch (error: any) {
+        // Record failed attempt
+        const result = recordFailedAttempt(adminEmail, 'password-change');
+        
+        if (error.code === 'auth/wrong-password') {
+          if (result.locked) {
+            setPasswordError(`Too many failed attempts. Account locked for 3 minutes.`);
+            setIsPasswordLocked(true);
+            setPasswordLockoutTime(180);
+          } else {
+            setPasswordError(`Current password is incorrect. (${result.attemptsLeft} attempts remaining)`);
+          }
+        } else if (error.code === 'auth/too-many-requests') {
+          setPasswordError("Too many failed attempts. Please try again later.");
+        } else {
+          if (result.locked) {
+            setPasswordError(`Too many failed attempts. Account locked for 3 minutes.`);
+            setIsPasswordLocked(true);
+            setPasswordLockoutTime(180);
+          } else {
+            setPasswordError(`Failed to verify current password. (${result.attemptsLeft} attempts remaining)`);
+          }
+        }
+        setIsUpdatingPassword(false);
+        return;
+      }
+      
+      // Update password
+      await updatePassword(user, newPassword);
+      
+      // Clear attempts on success
+      clearAttempts(adminEmail, 'password-change');
+      
+      // Clear form
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      
+      alert("Password updated successfully!");
+    } catch (error: any) {
+      console.error("Error updating password:", error);
+      setPasswordError(error.message || "Failed to update password. Please try again.");
+    } finally {
+      setIsUpdatingPassword(false);
     }
   };
 
@@ -2214,24 +2354,80 @@ export const SettingsPage: React.FC = () => {
           </TabsContent>
 
           <TabsContent value="admin" className="pt-6">
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handlePasswordUpdate} className="space-y-6">
               <div className="space-y-2">
                 <Label htmlFor="admin-email">Admin Email</Label>
                 <Input
                   id="admin-email"
                   type="email"
-                  defaultValue="admin@university.edu"
+                  value={adminEmail}
+                  disabled
+                  className="bg-gray-50"
                 />
+                <p className="text-sm text-gray-500">
+                  This is your current email address used for login.
+                </p>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="admin-password">New Password</Label>
-                <Input
-                  id="admin-password"
-                  type="password"
-                  placeholder="••••••••"
-                />
+              
+              <div className="border-t pt-4 mt-4">
+                <h3 className="text-lg font-semibold mb-4">Change Password</h3>
+                
+                {passwordError && (
+                  <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                    <p className="text-sm text-red-600">{passwordError}</p>
+                  </div>
+                )}
+                
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="current-password">Current Password</Label>
+                    <Input
+                      id="current-password"
+                      type="password"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      placeholder="Enter your current password"
+                      disabled={isUpdatingPassword || isPasswordLocked}
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="new-password">New Password</Label>
+                    <Input
+                      id="new-password"
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Enter new password (min 6 characters)"
+                      disabled={isUpdatingPassword || isPasswordLocked}
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="confirm-password">Confirm New Password</Label>
+                    <Input
+                      id="confirm-password"
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Re-enter new password"
+                      disabled={isUpdatingPassword || isPasswordLocked}
+                    />
+                  </div>
+                </div>
               </div>
-              <Button type="submit">Update Account</Button>
+              
+              <Button 
+                type="submit" 
+                disabled={isUpdatingPassword || isPasswordLocked || !currentPassword || !newPassword || !confirmPassword}
+              >
+                {isPasswordLocked 
+                  ? `Locked - Try again in ${formatRemainingTime(passwordLockoutTime)}`
+                  : isUpdatingPassword 
+                    ? "Updating Password..." 
+                    : "Update Password"
+                }
+              </Button>
             </form>
           </TabsContent>
         </CustomTabs>

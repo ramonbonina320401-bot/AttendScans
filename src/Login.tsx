@@ -4,6 +4,12 @@ import { signInWithEmailAndPassword, signOut, sendPasswordResetEmail } from "fir
 import { auth, db } from "./firebase";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { doc, getDoc } from "firebase/firestore";
+import { 
+  isLockedOut, 
+  recordFailedAttempt, 
+  clearAttempts, 
+  formatRemainingTime 
+} from "./utils/bruteForceProtection";
 
 // --- Success Popup Component ---
 const SuccessPopup = ({ message }: { message: string }) => (
@@ -28,6 +34,10 @@ export default function LoginComponent() {
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [studentIdError, setStudentIdError] = useState<string | null>(null);
+
+  // State for lockout
+  const [isLocked, setIsLocked] = useState(false);
+  const [lockoutTime, setLockoutTime] = useState(0);
 
   // State for forgot password modal
   const [showForgotPassword, setShowForgotPassword] = useState(false);
@@ -58,10 +68,50 @@ export default function LoginComponent() {
     checkAuth();
   }, [user, loading, navigate]);
 
+  // Check lockout status and update countdown
+  useEffect(() => {
+    const checkLockout = () => {
+      if (!email) return;
+      
+      const { locked, remainingTime } = isLockedOut(email, 'login');
+      setIsLocked(locked);
+      setLockoutTime(remainingTime);
+      
+      if (!locked) {
+        setError(null);
+      }
+    };
+    
+    checkLockout();
+    
+    // Update countdown every second if locked
+    const interval = setInterval(() => {
+      if (email) {
+        const { locked, remainingTime } = isLockedOut(email, 'login');
+        setIsLocked(locked);
+        setLockoutTime(remainingTime);
+        
+        if (!locked && isLocked) {
+          setError(null);
+        }
+      }
+    }, 1000);
+    
+    return () => clearInterval(interval);
+  }, [email, isLocked]);
+
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    // Check if locked out
+    const { locked, remainingTime } = isLockedOut(email, 'login');
+    if (locked) {
+      setError(`Too many failed attempts. Please try again in ${formatRemainingTime(remainingTime)}.`);
+      return;
+    }
+
     setSubmitting(true);
 
     // Validate student ID format if role is student
@@ -91,7 +141,16 @@ export default function LoginComponent() {
       if (!userDoc.exists()) {
         // If there's no user profile, sign out and show an error
         await signOut(auth);
-        setError("User data not found. Please contact support.");
+        
+        // Record failed attempt
+        const result = recordFailedAttempt(email, 'login');
+        if (result.locked) {
+          setError(`Too many failed attempts. Account locked for 3 minutes.`);
+          setIsLocked(true);
+          setLockoutTime(180);
+        } else {
+          setError(`User data not found. Please contact support. (${result.attemptsLeft} attempts remaining)`);
+        }
         setSubmitting(false);
         return;
       }
@@ -103,7 +162,16 @@ export default function LoginComponent() {
       // This prevents someone from selecting "student" and logging in with an instructor/admin account.
       if (role !== userRole) {
         await signOut(auth);
-        setError("Login failed. Please check your credentials and role.");
+        
+        // Record failed attempt
+        const result = recordFailedAttempt(email, 'login');
+        if (result.locked) {
+          setError(`Too many failed attempts. Account locked for 3 minutes.`);
+          setIsLocked(true);
+          setLockoutTime(180);
+        } else {
+          setError(`Login failed. Please check your credentials and role. (${result.attemptsLeft} attempts remaining)`);
+        }
         setSubmitting(false);
         return;
       }
@@ -121,13 +189,24 @@ export default function LoginComponent() {
         const storedStudentId = (userData.studentId ?? "").toString().trim();
         if (!studentNum || studentNum.toString().trim() !== storedStudentId) {
           await signOut(auth);
-          setError("Student ID does not match our records. Please use the Student ID you registered with.");
+          
+          // Record failed attempt
+          const result = recordFailedAttempt(email, 'login');
+          if (result.locked) {
+            setError(`Too many failed attempts. Account locked for 3 minutes.`);
+            setIsLocked(true);
+            setLockoutTime(180);
+          } else {
+            setError(`Student ID does not match our records. (${result.attemptsLeft} attempts remaining)`);
+          }
           setSubmitting(false);
           return;
         }
       }
 
-      // Success! Store user info if needed
+      // Success! Clear any failed attempts
+      clearAttempts(email, 'login');
+      
       console.log("Logged in user:", user);
       setSuccessMsg("Login successful! Redirecting...");
       
@@ -146,19 +225,32 @@ export default function LoginComponent() {
     } catch (err: any) {
       console.error("Login error:", err);
       
+      // Record failed attempt for authentication errors
+      const result = recordFailedAttempt(email, 'login');
+      
       // Handle Firebase errors
       let errorMessage = "Login failed. Please check your credentials.";
       if (err.code === "auth/user-not-found") {
-        errorMessage = "No account found with this email.";
+        errorMessage = `No account found with this email.`;
       } else if (err.code === "auth/wrong-password") {
-        errorMessage = "Incorrect password.";
+        errorMessage = `Incorrect password.`;
       } else if (err.code === "auth/invalid-email") {
         errorMessage = "Invalid email address.";
       } else if (err.code === "auth/too-many-requests") {
         errorMessage = "Too many failed attempts. Please try again later.";
       }
       
-      setError(errorMessage);
+      // Add attempts remaining to error message if not locked
+      if (result.locked) {
+        setError(`Too many failed attempts. Account locked for 3 minutes.`);
+        setIsLocked(true);
+        setLockoutTime(180);
+      } else if (err.code !== "auth/invalid-email" && err.code !== "auth/too-many-requests") {
+        setError(`${errorMessage} (${result.attemptsLeft} attempts remaining)`);
+      } else {
+        setError(errorMessage);
+      }
+      
       setSubmitting(false);
     }
   };
@@ -376,10 +468,15 @@ export default function LoginComponent() {
           {/* Submit Button */}
           <button
             type="submit"
-            disabled={submitting}
+            disabled={submitting || isLocked}
             className="w-full bg-black text-white py-2.5 rounded-lg hover:bg-gray-800 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black disabled:bg-gray-400 disabled:cursor-not-allowed"
           >
-            {submitting ? "Submitting..." : "Continue"}
+            {isLocked 
+              ? `Locked - Try again in ${formatRemainingTime(lockoutTime)}`
+              : submitting 
+                ? "Submitting..." 
+                : "Continue"
+            }
           </button>
 
           {/* Register Link now uses <Link> */}

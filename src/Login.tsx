@@ -61,14 +61,7 @@ export default function LoginComponent() {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // Check if email is verified
-      if (!user.emailVerified) {
-        setError("Please verify your email before logging in.");
-        setSubmitting(false);
-        return;
-      }
-
-      // Fetch user role and metadata from Firestore
+      // Fetch user role and metadata from Firestore first
       const userDoc = await getDoc(doc(db, "users", user.uid));
       if (!userDoc.exists()) {
         // If there's no user profile, sign out and show an error
@@ -86,6 +79,14 @@ export default function LoginComponent() {
       if (role !== userRole) {
         await signOut(auth);
         setError(`Account role mismatch. This account is registered as '${userRole}'. Please select the correct role.`);
+        setSubmitting(false);
+        return;
+      }
+
+      // Check if email is verified (after role check so we get the correct error first)
+      if (!user.emailVerified) {
+        await signOut(auth);
+        setError("Please verify your email before logging in.");
         setSubmitting(false);
         return;
       }

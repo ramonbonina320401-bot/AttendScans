@@ -2,7 +2,12 @@ import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import QrScanner from "./QrScanner";
 import AttendanceReport from "./AttendanceReport";
-import { markAttendance, getStudentAttendance, type QRCodeData, type AttendanceRecord } from "./services/attendanceService";
+import {
+  markAttendance,
+  getStudentAttendance,
+  type QRCodeData,
+  type AttendanceRecord,
+} from "./services/attendanceService";
 import { auth, db } from "./firebase";
 import { doc, getDoc } from "firebase/firestore";
 import { signOut } from "firebase/auth";
@@ -31,7 +36,9 @@ const StudentDashboard: React.FC = () => {
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
   const [studentName, setStudentName] = useState<string>("Student");
-  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
+  const [attendanceRecords, setAttendanceRecords] = useState<
+    AttendanceRecord[]
+  >([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false); // Prevent multiple scans
   const [sessionId, setSessionId] = useState<string>(""); // Manual session ID entry
@@ -52,11 +59,13 @@ const StudentDashboard: React.FC = () => {
         }
 
         // Fetch student info
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        const userDoc = await getDoc(doc(db, "users", user.uid));
         const userData = userDoc.data();
-        
+
         if (userData) {
-          const fullName = `${userData.firstName || ''} ${userData.lastName || ''}`.trim();
+          const fullName = `${userData.firstName || ""} ${
+            userData.lastName || ""
+          }`.trim();
           setStudentName(fullName || "Student");
         }
 
@@ -66,7 +75,7 @@ const StudentDashboard: React.FC = () => {
 
         // Check if attendance is already marked today
         const today = new Date().toLocaleDateString();
-        const markedToday = records.some(record => record.date === today);
+        const markedToday = records.some((record) => record.date === today);
         setIsAttendanceMarked(markedToday);
 
         setIsLoading(false);
@@ -91,27 +100,27 @@ const StudentDashboard: React.FC = () => {
     console.log("Scanned QR Code:", decodedText);
     setIsProcessing(true);
     setScanError(null); // Clear any previous errors
-    
+
     try {
       // Parse the QR code data
       const qrData: QRCodeData = JSON.parse(decodedText);
-      
+
       // Mark attendance using the service
       const result = await markAttendance(qrData);
-      
+
       if (result.success) {
         setScanResult(`${qrData.className} - ${qrData.date}`);
         setIsAttendanceMarked(true);
         setIsCameraActive(false); // Stop camera on success
         setScanError(null);
-        
+
         // Refresh attendance records
         const records = await getStudentAttendance();
         setAttendanceRecords(records);
-        
+
         // Show success message in UI
         setScanError(`✅ Success! Attendance marked for ${qrData.className}`);
-        
+
         // Clear success message after 5 seconds
         setTimeout(() => {
           setScanError(null);
@@ -128,7 +137,9 @@ const StudentDashboard: React.FC = () => {
     } catch (err: any) {
       console.error("Error processing QR code:", err);
       setIsCameraActive(false); // Stop camera on invalid QR format
-      setScanError("❌ Invalid QR code format. Please scan a valid attendance QR code.");
+      setScanError(
+        "❌ Invalid QR code format. Please scan a valid attendance QR code."
+      );
       // Clear error after 5 seconds
       setTimeout(() => {
         setScanError(null);
@@ -154,19 +165,23 @@ const StudentDashboard: React.FC = () => {
 
     try {
       // Fetch the QR data from Firestore using session ID
-      const { collection, query, where, getDocs } = await import('firebase/firestore');
-      const { db } = await import('./firebase');
-      
+      const { collection, query, where, getDocs } = await import(
+        "firebase/firestore"
+      );
+      const { db } = await import("./firebase");
+
       // Try to find an active session with this sessionId (8-character code)
       const sessionsQuery = query(
-        collection(db, 'activeSessions'),
-        where('sessionId', '==', sessionId.trim().toUpperCase())
+        collection(db, "activeSessions"),
+        where("sessionId", "==", sessionId.trim().toUpperCase())
       );
-      
+
       const sessionsSnapshot = await getDocs(sessionsQuery);
-      
+
       if (sessionsSnapshot.empty) {
-        setScanError("❌ Invalid or expired Session ID. Please check with your instructor.");
+        setScanError(
+          "❌ Invalid or expired Session ID. Please check with your instructor."
+        );
         setTimeout(() => setScanError(null), 5000);
         setIsProcessing(false);
         return;
@@ -182,24 +197,24 @@ const StudentDashboard: React.FC = () => {
         expiresAt: sessionData.expiresAt,
         date: sessionData.date,
         sessionId: sessionData.sessionId,
-        course: sessionData.course || '',
-        section: sessionData.section || ''
+        course: sessionData.course || "",
+        section: sessionData.section || "",
       };
 
       // Mark attendance using the service
       const result = await markAttendance(qrData);
-      
+
       if (result.success) {
         setScanResult(`${qrData.className} - ${qrData.date}`);
         setIsAttendanceMarked(true);
         setIsCameraActive(false);
         setScanError(`✅ Success! Attendance marked for ${qrData.className}`);
         setSessionId("");
-        
+
         // Refresh attendance records
         const records = await getStudentAttendance();
         setAttendanceRecords(records);
-        
+
         setTimeout(() => setScanError(null), 5000);
       } else {
         setScanError(`❌ ${result.message}`);
@@ -207,7 +222,9 @@ const StudentDashboard: React.FC = () => {
       }
     } catch (error: any) {
       console.error("Error with manual entry:", error);
-      setScanError("❌ Failed to mark attendance. Please try scanning the QR code instead.");
+      setScanError(
+        "❌ Failed to mark attendance. Please try scanning the QR code instead."
+      );
       setTimeout(() => setScanError(null), 5000);
     } finally {
       setIsProcessing(false);
@@ -216,14 +233,14 @@ const StudentDashboard: React.FC = () => {
 
   const handleScanFailure = (error: any) => {
     const errorMessage = error.message || "Failed to scan QR code.";
-    
+
     // Don't show "No MultiFormat Readers" errors - these are normal when camera doesn't see a QR code
     if (errorMessage.includes("No MultiFormat Readers")) {
       return;
     }
-    
+
     console.error("QR Scan Failed:", errorMessage);
-    
+
     // Only show meaningful errors
     if (!errorMessage.includes("NotFoundException")) {
       setScanError(`Scan Error: ${errorMessage}`);
@@ -263,8 +280,11 @@ const StudentDashboard: React.FC = () => {
   if (view === "report") {
     // Calculate stats from real attendance records
     const totalClasses = attendanceRecords.length;
-    const present = attendanceRecords.filter(r => r.status === 'present').length;
-    const percentage = totalClasses > 0 ? Math.round((present / totalClasses) * 100) : 0;
+    const present = attendanceRecords.filter(
+      (r) => r.status === "present"
+    ).length;
+    const percentage =
+      totalClasses > 0 ? Math.round((present / totalClasses) * 100) : 0;
 
     // Format attendance records for the report - pass scannedAt for time display
     const formattedHistory = attendanceRecords.map((record, index) => ({
@@ -286,7 +306,7 @@ const StudentDashboard: React.FC = () => {
   }
 
   // --- Default View: Dashboard ---
-  
+
   // Show loading state while fetching data
   if (isLoading) {
     return (
@@ -354,7 +374,8 @@ const StudentDashboard: React.FC = () => {
                   Confirm Logout
                 </h3>
                 <p className="text-sm text-gray-500 mb-6">
-                  Are you sure you want to log out? You will need to log in again to mark attendance.
+                  Are you sure you want to log out? You will need to log in
+                  again to mark attendance.
                 </p>
                 <div className="flex gap-3">
                   <button
@@ -443,7 +464,9 @@ const StudentDashboard: React.FC = () => {
             <div className="my-6">
               {isCameraActive ? (
                 <QrScanner
-                  onScanSuccess={(decodedText) => handleScanSuccess(decodedText)}
+                  onScanSuccess={(decodedText) =>
+                    handleScanSuccess(decodedText)
+                  }
                   onScanFailure={handleScanFailure}
                 />
               ) : (
@@ -459,13 +482,13 @@ const StudentDashboard: React.FC = () => {
             {scanError && (
               <div
                 className={`flex items-center p-4 mb-4 text-sm rounded-lg ${
-                  scanError.startsWith('✅') 
-                    ? 'text-green-800 bg-green-50' 
-                    : 'text-red-800 bg-red-50'
+                  scanError.startsWith("✅")
+                    ? "text-green-800 bg-green-50"
+                    : "text-red-800 bg-red-50"
                 }`}
                 role="alert"
               >
-                {scanError.startsWith('✅') ? (
+                {scanError.startsWith("✅") ? (
                   <CheckCircle className="flex-shrink-0 inline w-4 h-4 mr-3" />
                 ) : (
                   <AlertTriangle className="flex-shrink-0 inline w-4 h-4 mr-3" />
@@ -490,14 +513,6 @@ const StudentDashboard: React.FC = () => {
                 <Camera size={16} className="mr-2" />
                 {isCameraActive ? "Stop Camera" : "Start Camera"}
               </button>
-              <button
-                onClick={handleUploadButtonClick}
-                disabled={isCameraActive}
-                className="flex-1 inline-flex items-center justify-center px-4 py-3 text-sm font-medium text-gray-800 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Upload size={16} className="mr-2" />
-                Upload QR Image
-              </button>
             </div>
 
             {/* --- Manual Session ID Entry --- */}
@@ -507,7 +522,8 @@ const StudentDashboard: React.FC = () => {
                 Can't Scan? Enter Session ID
               </h3>
               <p className="text-xs text-gray-500 mb-3">
-                Ask your instructor for the 8-character Session ID displayed on screen
+                Ask your instructor for the 8-character Session ID displayed on
+                screen
               </p>
               <div className="flex gap-2">
                 <input

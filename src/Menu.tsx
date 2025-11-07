@@ -136,7 +136,7 @@ function Menu() {
                 </div>
                 {/* Step 3 */}
                 <div className="text-center">
-                  <div className="flex items-center justify-center w-16 h-16 bg-slate-200 text-slate-800 rounded-full mx-auto text-2xl font-blank">
+                  <div className="flex items-center justify-center w-16 h-16 bg-slate-200 text-slate-800 rounded-full mx-auto text-2xl font-bold">
                     3
                   </div>
                   <h3 className="mt-5 text-2xl font-semibold text-slate-900">

@@ -6,15 +6,16 @@ import React, {
   useEffect,
   useRef,
 } from "react";
+import ReactDOM from "react-dom"; // FIXED: Added missing import for ReactDOM
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
-import QRCode from 'qrcode';
+import QRCode from "qrcode";
 import { auth } from "./firebase";
 import { signOut } from "firebase/auth";
-import { 
-  isLockedOut, 
-  recordFailedAttempt, 
-  clearAttempts, 
-  formatRemainingTime 
+import {
+  isLockedOut,
+  recordFailedAttempt,
+  clearAttempts,
+  formatRemainingTime,
 } from "./utils/bruteForceProtection";
 // --- react-icons imports ARE NOW INCLUDED ---
 import {
@@ -250,7 +251,7 @@ const CustomSelect: React.FC<React.SelectHTMLAttributes<HTMLSelectElement>> = ({
   <div className="relative">
     <select
       className={`w-full appearance-none rounded-lg border border-gray-300 px-4 py-3 pr-12 text-base font-medium text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-gray-500 whitespace-nowrap overflow-hidden text-ellipsis ${className}`}
-      style={{ minHeight: '44px' }}
+      style={{ minHeight: "44px" }}
       {...props}
     >
       {children}
@@ -267,37 +268,89 @@ const CustomDatePicker: React.FC<
   <Input type="date" className={`relative ${className}`} {...props} />
 );
 
-// Custom Dropdown (for action menus)
+// A Portal component to render dropdowns at the top level of the DOM
+const Portal: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
+
+  // Renders children into the body only on the client-side
+  return mounted ? ReactDOM.createPortal(children, document.body) : null;
+};
+
+// Custom Dropdown (for action menus) - Modified to use Portal
 const CustomDropdown: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState({ top: 0, left: 0 });
 
-  // Close on outside click
+  // Calculate the position of the dropdown content relative to the trigger button
+  const updatePosition = () => {
+    if (triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      // Position below the trigger, aligning its right edge with the trigger's right edge
+      setPosition({
+        top: rect.bottom + window.scrollY,
+        left: rect.right + window.scrollX,
+      });
+    }
+  };
+
+  const handleToggle = () => {
+    if (!isOpen) {
+      updatePosition(); // Recalculate position just before opening
+    }
+    setIsOpen((prev) => !prev);
+  };
+
+  // Close the dropdown if a click occurs outside of it
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+      if (
+        isOpen &&
+        triggerRef.current &&
+        !triggerRef.current.contains(event.target as Node) &&
+        contentRef.current &&
+        !contentRef.current.contains(event.target as Node)
+      ) {
         setIsOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  }, [isOpen]);
 
   return (
-    <div className="relative" ref={menuRef}>
+    <div className="relative" ref={triggerRef}>
       {React.Children.map(children, (child) => {
         if (React.isValidElement(child)) {
-          // Find the trigger
+          // Clone the trigger to add the onClick handler
           if ((child.type as any).displayName === "DropdownTrigger") {
             return React.cloneElement(child, {
-              onClick: () => setIsOpen(!isOpen),
+              onClick: handleToggle,
             } as any);
           }
-          // Find the content
+          // If open, render the content inside a Portal
           if ((child.type as any).displayName === "DropdownContent") {
-            return isOpen ? child : null;
+            return isOpen ? (
+              <Portal>
+                {React.cloneElement(child, {
+                  ref: contentRef, // Forward ref to the content
+                  style: {
+                    position: "absolute", // Use absolute because it's relative to the document
+                    top: `${position.top}px`,
+                    left: `${position.left}px`,
+                    transform: "translateX(-100%)", // Align right edge
+                  },
+                } as any)}
+              </Portal>
+            ) : null;
           }
         }
         return null;
@@ -310,17 +363,22 @@ const DropdownTrigger: React.FC<
 > = (props) => <Button variant="ghost" size="icon" {...props} />;
 DropdownTrigger.displayName = "DropdownTrigger";
 
-const DropdownContent: React.FC<{
-  children: React.ReactNode;
-  align?: "right" | "left";
-}> = ({ children, align = "right" }) => (
+const DropdownContent = React.forwardRef<
+  HTMLDivElement,
+  {
+    children: React.ReactNode;
+    align?: "right" | "left";
+    style?: React.CSSProperties;
+  }
+>(({ children, style }, ref) => (
   <div
-    className={`absolute z-50 mt-2 w-48 bg-white rounded-md shadow-lg py-1 ring-1 ring-black ring-opacity-5 max-h-48 overflow-visible
-      ${align === "right" ? "right-0" : "left-0"}`}
+    ref={ref}
+    style={style} // Apply dynamic styles for positioning
+    className={`fixed z-50 mt-2 w-48 bg-white rounded-md shadow-lg py-1 ring-1 ring-black ring-opacity-5`}
   >
     {children}
   </div>
-);
+));
 DropdownContent.displayName = "DropdownContent";
 
 const DropdownMenuItem: React.FC<
@@ -364,7 +422,7 @@ const TabsList: React.FC<{
   activeTab?: string;
   setActiveTab?: (value: string) => void;
 }> = ({ children, activeTab, setActiveTab }) => (
-  <div className="flex border-b border-gray-200">
+  <div className="flex border-b border-gray-200 overflow-x-auto">
     {React.Children.map(children, (child) => {
       if (
         React.isValidElement(child) &&
@@ -390,7 +448,7 @@ const TabsTrigger: React.FC<{
 }> = ({ children, isActive, onClick }) => (
   <button
     onClick={onClick}
-    className={`px-4 py-2 text-sm font-medium border-b-2
+    className={`px-4 py-2 text-sm font-medium border-b-2 whitespace-nowrap
       ${
         isActive
           ? "border-gray-800 text-gray-900"
@@ -442,14 +500,17 @@ const Topbar: React.FC<{ onMenuClick: () => void }> = ({ onMenuClick }) => {
   useEffect(() => {
     const checkRecentAttendance = () => {
       const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-      const recent = records.filter(record => {
-        const scannedDate = new Date(record.date + ' ' + record.time);
-        return scannedDate > fiveMinutesAgo;
-      }).sort((a, b) => {
-        const dateA = new Date(a.date + ' ' + a.time);
-        const dateB = new Date(b.date + ' ' + b.time);
-        return dateB.getTime() - dateA.getTime();
-      }).slice(0, 10); // Get last 10
+      const recent = records
+        .filter((record) => {
+          const scannedDate = new Date(record.date + " " + record.time);
+          return scannedDate > fiveMinutesAgo;
+        })
+        .sort((a, b) => {
+          const dateA = new Date(a.date + " " + a.time);
+          const dateB = new Date(b.date + " " + b.time);
+          return dateB.getTime() - dateA.getTime();
+        })
+        .slice(0, 10); // Get last 10
 
       setRecentAttendance(recent);
       setUnreadCount(recent.length);
@@ -494,7 +555,7 @@ const Topbar: React.FC<{ onMenuClick: () => void }> = ({ onMenuClick }) => {
       const results: any[] = [];
 
       // Search students
-      students.forEach(student => {
+      students.forEach((student) => {
         if (
           student.name.toLowerCase().includes(query) ||
           student.email.toLowerCase().includes(query) ||
@@ -503,16 +564,16 @@ const Topbar: React.FC<{ onMenuClick: () => void }> = ({ onMenuClick }) => {
           student.section.toLowerCase().includes(query)
         ) {
           results.push({
-            type: 'student',
+            type: "student",
             data: student,
             label: student.name,
-            sublabel: `${student.email} • ${student.course} - Section ${student.section}`
+            sublabel: `${student.email} - ${student.course} - Section ${student.section}`,
           });
         }
       });
 
       // Search attendance records
-      records.forEach(record => {
+      records.forEach((record) => {
         if (
           record.name.toLowerCase().includes(query) ||
           record.studentId.toLowerCase().includes(query) ||
@@ -521,10 +582,10 @@ const Topbar: React.FC<{ onMenuClick: () => void }> = ({ onMenuClick }) => {
           (record.className && record.className.toLowerCase().includes(query))
         ) {
           results.push({
-            type: 'attendance',
+            type: "attendance",
             data: record,
-            label: `${record.name} - ${record.className || 'Attendance'}`,
-            sublabel: `${record.date} • ${record.course} - Section ${record.section}`
+            label: `${record.name} - ${record.className || "Attendance"}`,
+            sublabel: `${record.date} - ${record.course} - Section ${record.section}`,
           });
         }
       });
@@ -564,7 +625,9 @@ const Topbar: React.FC<{ onMenuClick: () => void }> = ({ onMenuClick }) => {
               className="pl-10 pr-4 py-2 w-32 sm:w-64"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              onFocus={() => searchQuery.length > 0 && setShowSearchResults(true)}
+              onFocus={() =>
+                searchQuery.length > 0 && setShowSearchResults(true)
+              }
             />
             {showSearchResults && searchResults.length > 0 && (
               <div className="absolute top-full mt-2 w-full sm:w-96 bg-white rounded-md shadow-lg border border-gray-200 max-h-96 overflow-y-auto z-50">
@@ -583,7 +646,7 @@ const Topbar: React.FC<{ onMenuClick: () => void }> = ({ onMenuClick }) => {
                     >
                       <div className="flex items-start">
                         <div className="flex-shrink-0 mt-1">
-                          {result.type === 'student' ? (
+                          {result.type === "student" ? (
                             <FiUsers className="w-4 h-4 text-blue-500" />
                           ) : (
                             <FiFileText className="w-4 h-4 text-green-500" />
@@ -598,7 +661,7 @@ const Topbar: React.FC<{ onMenuClick: () => void }> = ({ onMenuClick }) => {
                           </p>
                         </div>
                         <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">
-                          {result.type === 'student' ? 'Student' : 'Attendance'}
+                          {result.type === "student" ? "Student" : "Attendance"}
                         </span>
                       </div>
                     </div>
@@ -606,18 +669,20 @@ const Topbar: React.FC<{ onMenuClick: () => void }> = ({ onMenuClick }) => {
                 </div>
               </div>
             )}
-            {showSearchResults && searchResults.length === 0 && searchQuery.length > 0 && (
-              <div className="absolute top-full mt-2 w-full sm:w-96 bg-white rounded-md shadow-lg border border-gray-200 p-4 z-50">
-                <p className="text-sm text-gray-500 text-center">
-                  No results found for "{searchQuery}"
-                </p>
-              </div>
-            )}
+            {showSearchResults &&
+              searchResults.length === 0 &&
+              searchQuery.length > 0 && (
+                <div className="absolute top-full mt-2 w-full sm:w-96 bg-white rounded-md shadow-lg border border-gray-200 p-4 z-50">
+                  <p className="text-sm text-gray-500 text-center">
+                    No results found for "{searchQuery}"
+                  </p>
+                </div>
+              )}
           </div>
           <div className="relative" ref={notificationRef}>
-            <Button 
-              variant="ghost" 
-              size="icon" 
+            <Button
+              variant="ghost"
+              size="icon"
               className="relative rounded-full"
               onClick={() => {
                 setShowNotifications(!showNotifications);
@@ -631,13 +696,13 @@ const Topbar: React.FC<{ onMenuClick: () => void }> = ({ onMenuClick }) => {
                 <>
                   <span className="absolute top-2 right-2 block w-2 h-2 bg-red-500 rounded-full ring-2 ring-white"></span>
                   <span className="absolute -top-1 -right-1 flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-red-500 rounded-full">
-                    {unreadCount > 9 ? '9+' : unreadCount}
+                    {unreadCount > 9 ? "9+" : unreadCount}
                   </span>
                 </>
               )}
               <span className="sr-only">View notifications</span>
             </Button>
-            
+
             {showNotifications && (
               <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-white rounded-md shadow-lg border border-gray-200 max-h-[32rem] overflow-y-auto z-50">
                 <div className="p-3 border-b border-gray-200 bg-gray-50">
@@ -652,7 +717,7 @@ const Topbar: React.FC<{ onMenuClick: () => void }> = ({ onMenuClick }) => {
                     )}
                   </div>
                 </div>
-                
+
                 <div className="divide-y divide-gray-100">
                   {recentAttendance.length > 0 ? (
                     recentAttendance.map((record, index) => (
@@ -671,7 +736,7 @@ const Topbar: React.FC<{ onMenuClick: () => void }> = ({ onMenuClick }) => {
                               {record.name}
                             </p>
                             <p className="text-xs text-gray-500 mt-0.5">
-                              {record.course} • Section {record.section}
+                              {record.course} - Section {record.section}
                             </p>
                             {record.className && (
                               <p className="text-xs text-gray-600 mt-1">
@@ -679,7 +744,7 @@ const Topbar: React.FC<{ onMenuClick: () => void }> = ({ onMenuClick }) => {
                               </p>
                             )}
                             <p className="text-xs text-gray-400 mt-1">
-                              {record.time} • {record.date}
+                              {record.time} - {record.date}
                             </p>
                           </div>
                           <div className="flex-shrink-0">
@@ -702,7 +767,7 @@ const Topbar: React.FC<{ onMenuClick: () => void }> = ({ onMenuClick }) => {
                     </div>
                   )}
                 </div>
-                
+
                 {recentAttendance.length > 0 && (
                   <div className="p-3 border-t border-gray-200 bg-gray-50">
                     <button
@@ -737,13 +802,6 @@ const Topbar: React.FC<{ onMenuClick: () => void }> = ({ onMenuClick }) => {
             </button>
             {dropdownOpen && (
               <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 ring-1 ring-black ring-opacity-5">
-                <Link
-                  to="/profile"
-                  onClick={() => setDropdownOpen(false)}
-                  className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                >
-                  Your Profile
-                </Link>
                 <Link
                   to="/dashboard/settings"
                   onClick={() => setDropdownOpen(false)}
@@ -791,7 +849,8 @@ const Topbar: React.FC<{ onMenuClick: () => void }> = ({ onMenuClick }) => {
                 Confirm Sign Out
               </h3>
               <p className="text-sm text-gray-500 mb-6">
-                Are you sure you want to sign out? You will need to log in again to access your dashboard.
+                Are you sure you want to sign out? You will need to log in again
+                to access your dashboard.
               </p>
               <div className="flex gap-3">
                 <button
@@ -822,9 +881,11 @@ const Sidebar: React.FC = () => {
   return (
     <aside className="hidden lg:flex flex-col w-64 bg-white border-r border-gray-200 fixed top-0 left-0 h-screen z-40">
       <div className="flex items-center h-16 px-4 border-b border-gray-200">
-        <span className="flex items-center justify-center w-8 h-8 bg-gray-800 rounded-md text-white font-bold text-lg">
-          A
-        </span>
+        <img
+          src="/attendscan_logo.png"
+          alt="AttendScan Logo"
+          className="w-8 h-8"
+        />
         <span className="ml-3 text-lg font-bold text-gray-800 tracking-wide">
           ATTENDSCAN
         </span>
@@ -871,9 +932,11 @@ const MobileSidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
       >
         <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200">
           <div className="flex items-center">
-            <span className="flex items-center justify-center w-8 h-8 bg-gray-800 rounded-md text-white font-bold text-lg">
-              A
-            </span>
+            <img
+              src="/attendscan_logo.png"
+              alt="AttendScan Logo"
+              className="w-8 h-8"
+            />
             <span className="ml-3 text-lg font-bold text-gray-800">
               ATTENDSCAN
             </span>
@@ -919,27 +982,29 @@ export const DashboardPage: React.FC = () => {
   const [todayStats, setTodayStats] = useState({
     present: 0,
     late: 0,
-    absent: 0
+    absent: 0,
   });
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
-      const { getInstructorAttendanceRecords } = await import('./services/adminService');
+      const { getInstructorAttendanceRecords } = await import(
+        "./services/adminService"
+      );
       const recordsData = await getInstructorAttendanceRecords();
-      
-      const mappedRecords: AttendanceRecord[] = recordsData.map(r => ({
+
+      const mappedRecords: AttendanceRecord[] = recordsData.map((r) => ({
         id: r.id,
         studentId: r.studentId,
         name: r.studentName,
         date: r.date,
         time: new Date(r.scannedAt).toLocaleTimeString(),
         status: r.status.toUpperCase() as "PRESENT" | "LATE" | "ABSENT",
-        course: r.course || 'N/A',
-        section: r.section || 'N/A',
-        className: r.className
+        course: r.course || "N/A",
+        section: r.section || "N/A",
+        className: r.className,
       }));
-      
+
       setRecords(mappedRecords);
       console.log("Dashboard refreshed:", mappedRecords.length, "records");
     } catch (error) {
@@ -955,7 +1020,7 @@ export const DashboardPage: React.FC = () => {
     setTodayStats({
       present: Math.round(stats.present * 0.7), // Mock today percentage
       late: Math.round(stats.late * 0.8),
-      absent: Math.round(stats.absent * 0.5)
+      absent: Math.round(stats.absent * 0.5),
     });
   }, [stats]);
 
@@ -973,8 +1038,10 @@ export const DashboardPage: React.FC = () => {
             onClick={handleRefresh}
             disabled={isRefreshing}
           >
-            <FiRefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-            {isRefreshing ? 'Refreshing...' : 'Refresh'}
+            <FiRefreshCw
+              className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
+            />
+            {isRefreshing ? "Refreshing..." : "Refresh"}
           </Button>
         </CardHeader>
         <CardContent>
@@ -988,19 +1055,31 @@ export const DashboardPage: React.FC = () => {
             <StatCard
               title="PRESENT TODAY"
               value={todayStats.present}
-              percentage={stats.total > 0 ? Math.round((todayStats.present / stats.total) * 100) : 0}
+              percentage={
+                stats.total > 0
+                  ? Math.round((todayStats.present / stats.total) * 100)
+                  : 0
+              }
               description="Marked as present"
             />
             <StatCard
               title="LATE TODAY"
               value={todayStats.late}
-              percentage={stats.total > 0 ? Math.round((todayStats.late / stats.total) * 100) : 0}
+              percentage={
+                stats.total > 0
+                  ? Math.round((todayStats.late / stats.total) * 100)
+                  : 0
+              }
               description="Arrived after schedule"
             />
             <StatCard
               title="ABSENT TODAY"
               value={todayStats.absent}
-              percentage={stats.total > 0 ? Math.round((todayStats.absent / stats.total) * 100) : 0}
+              percentage={
+                stats.total > 0
+                  ? Math.round((todayStats.absent / stats.total) * 100)
+                  : 0
+              }
               description="No attendance recorded"
             />
           </div>
@@ -1065,7 +1144,8 @@ const StatCard: React.FC<StatCardProps> = ({
 export const GenerateQrPage: React.FC = () => {
   const [qrCodeUrl, setQrCodeUrl] = useState<string>("");
   const [sessionData, setSessionData] = useState<any>(null);
-  const [selectedCourseSection, setSelectedCourseSection] = useState<string>("");
+  const [selectedCourseSection, setSelectedCourseSection] =
+    useState<string>("");
   const [className, setClassName] = useState<string>("");
   const [duration, setDuration] = useState<number>(60); // Default 1 hour in minutes
   const [isGenerating, setIsGenerating] = useState(false);
@@ -1080,18 +1160,22 @@ export const GenerateQrPage: React.FC = () => {
   useEffect(() => {
     const fetchCourses = async () => {
       try {
-        const { db, auth } = await import('./firebase');
-        const { doc, getDoc } = await import('firebase/firestore');
+        const { db, auth } = await import("./firebase");
+        const { doc, getDoc } = await import("firebase/firestore");
         const user = auth.currentUser;
-        
+
         if (user) {
-          const courseDoc = await getDoc(doc(db, 'instructorCourses', user.uid));
+          const courseDoc = await getDoc(
+            doc(db, "instructorCourses", user.uid)
+          );
           if (courseDoc.exists()) {
             const fetchedCourseSections = courseDoc.data().courseSections || [];
             setCourseSections(fetchedCourseSections);
             // Set first course-section as default if available
             if (fetchedCourseSections.length > 0) {
-              setSelectedCourseSection(`${fetchedCourseSections[0].course} - Section ${fetchedCourseSections[0].section}`);
+              setSelectedCourseSection(
+                `${fetchedCourseSections[0].course} - Section ${fetchedCourseSections[0].section}`
+              );
             }
           }
         }
@@ -1118,18 +1202,25 @@ export const GenerateQrPage: React.FC = () => {
     setIsGenerating(true);
     try {
       // Import the service dynamically to avoid import issues
-      const { generateQRCodeData } = await import('./services/attendanceService');
-      
+      const { generateQRCodeData } = await import(
+        "./services/attendanceService"
+      );
+
       // Extract course and section from selectedCourseSection (format: "CS101 - Section A")
       const match = selectedCourseSection.match(/^(.+?)\s*-\s*Section\s*(.+)$/);
       const course = match ? match[1].trim() : selectedCourseSection;
-      const section = match ? match[2].trim() : 'A';
-      
+      const section = match ? match[2].trim() : "A";
+
       // Combine course-section and class name for the full class identifier
       const fullClassName = `${selectedCourseSection} - ${className}`;
-      
+
       // Generate QR code data with course and section
-      const qrData = await generateQRCodeData(fullClassName, duration, course, section);
+      const qrData = await generateQRCodeData(
+        fullClassName,
+        duration,
+        course,
+        section
+      );
       setSessionData(qrData);
 
       // Generate QR code image
@@ -1138,11 +1229,11 @@ export const GenerateQrPage: React.FC = () => {
         width: 300,
         margin: 2,
         color: {
-          dark: '#000000',
-          light: '#FFFFFF'
-        }
+          dark: "#000000",
+          light: "#FFFFFF",
+        },
       });
-      
+
       setQrCodeUrl(qrImageUrl);
     } catch (error) {
       console.error("Error generating QR code:", error);
@@ -1165,18 +1256,32 @@ export const GenerateQrPage: React.FC = () => {
     // Generate new QR code with current settings first
     setIsGenerating(true);
     try {
-      console.log("Starting deployment with course-section:", selectedCourseSection, "className:", className, "duration:", duration);
-      
-      const { generateQRCodeData } = await import('./services/attendanceService');
-      
+      console.log(
+        "Starting deployment with course-section:",
+        selectedCourseSection,
+        "className:",
+        className,
+        "duration:",
+        duration
+      );
+
+      const { generateQRCodeData } = await import(
+        "./services/attendanceService"
+      );
+
       // Extract course and section from selectedCourseSection (format: "CS101 - Section A")
       const match = selectedCourseSection.match(/^(.+?)\s*-\s*Section\s*(.+)$/);
       const course = match ? match[1].trim() : selectedCourseSection;
-      const section = match ? match[2].trim() : 'A';
-      
+      const section = match ? match[2].trim() : "A";
+
       // Combine course-section and class name
       const fullClassName = `${selectedCourseSection} - ${className}`;
-      const qrData = await generateQRCodeData(fullClassName, duration, course, section);
+      const qrData = await generateQRCodeData(
+        fullClassName,
+        duration,
+        course,
+        section
+      );
       console.log("Generated QR data:", qrData);
       setSessionData(qrData);
 
@@ -1186,29 +1291,29 @@ export const GenerateQrPage: React.FC = () => {
         width: 300,
         margin: 2,
         color: {
-          dark: '#000000',
-          light: '#FFFFFF'
-        }
+          dark: "#000000",
+          light: "#FFFFFF",
+        },
       });
-      
+
       console.log("QR code image generated");
       setQrCodeUrl(qrImageUrl);
-    
+
       // Save active session to Firestore with sessionId
-      const { collection, addDoc } = await import('firebase/firestore');
-      const { db, auth } = await import('./firebase');
+      const { collection, addDoc } = await import("firebase/firestore");
+      const { db, auth } = await import("./firebase");
       const user = auth.currentUser;
-      
+
       if (!user) {
         throw new Error("User not authenticated");
       }
-      
+
       if (!qrData) {
         throw new Error("QR data not generated");
       }
-      
+
       console.log("Saving to Firestore...");
-      await addDoc(collection(db, 'activeSessions'), {
+      await addDoc(collection(db, "activeSessions"), {
         sessionId: qrData.sessionId, // Store the unique session ID
         classId: qrData.classId,
         className: qrData.className,
@@ -1219,17 +1324,24 @@ export const GenerateQrPage: React.FC = () => {
         date: qrData.date,
         course: qrData.course,
         section: qrData.section,
-        deployedAt: new Date().toISOString()
+        deployedAt: new Date().toISOString(),
       });
-      console.log("Active session saved to Firestore with sessionId:", qrData.sessionId);
-      
+      console.log(
+        "Active session saved to Firestore with sessionId:",
+        qrData.sessionId
+      );
+
       setIsDeployed(true);
       setDeployedAt(new Date());
       console.log("Deployment successful!");
     } catch (error: any) {
       console.error("Error deploying QR code:", error);
       console.error("Error details:", error.message, error.stack);
-      alert(`Failed to deploy QR code: ${error.message || 'Unknown error'}. Please try again.`);
+      alert(
+        `Failed to deploy QR code: ${
+          error.message || "Unknown error"
+        }. Please try again.`
+      );
     } finally {
       setIsGenerating(false);
     }
@@ -1248,7 +1360,7 @@ export const GenerateQrPage: React.FC = () => {
 
   const handleDownload = () => {
     if (!qrCodeUrl) return;
-    
+
     const link = document.createElement("a");
     link.href = qrCodeUrl;
     link.download = `attendance-qr-${sessionData.date}.png`;
@@ -1268,10 +1380,7 @@ export const GenerateQrPage: React.FC = () => {
               <h1 className="text-2xl font-bold">{sessionData?.className}</h1>
               <p className="text-sm text-gray-300">Scan to mark attendance</p>
             </div>
-            <Button 
-              variant="danger"
-              onClick={() => setShowEndModal(true)}
-            >
+            <Button variant="danger" onClick={() => setShowEndModal(true)}>
               <FiX className="mr-2 h-4 w-4" />
               End Deployment
             </Button>
@@ -1288,10 +1397,10 @@ export const GenerateQrPage: React.FC = () => {
                       src={qrCodeUrl}
                       alt="Attendance QR Code"
                       className="w-full max-w-lg md:max-w-xl"
-                      style={{ maxWidth: '500px', height: 'auto' }}
+                      style={{ maxWidth: "500px", height: "auto" }}
                     />
                   </div>
-                  
+
                   {/* Session ID Display */}
                   <div className="bg-blue-50 border-2 border-blue-300 rounded-xl px-6 py-5 w-full max-w-lg mb-6">
                     <div className="text-center">
@@ -1300,11 +1409,12 @@ export const GenerateQrPage: React.FC = () => {
                       </p>
                       <div className="bg-white rounded-lg px-6 py-4 border-2 border-blue-200">
                         <p className="text-3xl md:text-4xl font-bold font-mono text-blue-900 tracking-wider">
-                          {sessionData?.sessionId || 'N/A'}
+                          {sessionData?.sessionId || "N/A"}
                         </p>
                       </div>
                       <p className="text-xs text-blue-700 mt-2">
-                        Students can enter this 8-character code manually if scanning fails
+                        Students can enter this 8-character code manually if
+                        scanning fails
                       </p>
                     </div>
                   </div>
@@ -1313,21 +1423,30 @@ export const GenerateQrPage: React.FC = () => {
                   <div className="bg-gray-50 rounded-xl px-6 py-5 w-full max-w-lg border border-gray-200">
                     <div className="grid grid-cols-2 gap-4 text-center">
                       <div>
-                        <p className="text-xs text-gray-500 mb-1">Deployed At</p>
+                        <p className="text-xs text-gray-500 mb-1">
+                          Deployed At
+                        </p>
                         <p className="font-semibold text-gray-900">
                           {deployedAt?.toLocaleTimeString()}
                         </p>
                       </div>
                       <div>
-                        <p className="text-xs text-gray-500 mb-1">Valid Until</p>
+                        <p className="text-xs text-gray-500 mb-1">
+                          Valid Until
+                        </p>
                         <p className="font-semibold text-gray-900">
-                          {sessionData && new Date(sessionData.expiresAt).toLocaleTimeString()}
+                          {sessionData &&
+                            new Date(
+                              sessionData.expiresAt
+                            ).toLocaleTimeString()}
                         </p>
                       </div>
                       <div>
                         <p className="text-xs text-gray-500 mb-1">Duration</p>
                         <p className="font-semibold text-gray-900">
-                          {duration >= 60 ? `${duration / 60} hour${duration > 60 ? 's' : ''}` : `${duration} min`}
+                          {duration >= 60
+                            ? `${duration / 60} hour${duration > 60 ? "s" : ""}`
+                            : `${duration} min`}
                         </p>
                       </div>
                       <div>
@@ -1345,7 +1464,10 @@ export const GenerateQrPage: React.FC = () => {
         </div>
 
         {/* End Deployment Modal */}
-        <CustomModal isOpen={showEndModal} onClose={() => setShowEndModal(false)}>
+        <CustomModal
+          isOpen={showEndModal}
+          onClose={() => setShowEndModal(false)}
+        >
           <div className="space-y-4">
             <div className="flex items-center gap-3">
               <div className="flex-shrink-0 p-3 bg-red-100 rounded-full">
@@ -1363,7 +1485,8 @@ export const GenerateQrPage: React.FC = () => {
 
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
               <p className="text-sm text-yellow-800">
-                To confirm, please type <span className="font-mono font-bold">redeploy</span> below:
+                To confirm, please type{" "}
+                <span className="font-mono font-bold">redeploy</span> below:
               </p>
             </div>
 
@@ -1410,9 +1533,7 @@ export const GenerateQrPage: React.FC = () => {
     <Card className="max-w-2xl mx-auto">
       <CardHeader className="text-center">
         <FaQrcode className="mx-auto h-12 w-12 text-gray-700" />
-        <CardTitle className="text-2xl pt-2">
-          Attendance QR Code
-        </CardTitle>
+        <CardTitle className="text-2xl pt-2">Attendance QR Code</CardTitle>
         <CardDescription>
           Configure and deploy your attendance QR code
         </CardDescription>
@@ -1432,8 +1553,12 @@ export const GenerateQrPage: React.FC = () => {
         ) : (
           <div className="p-4 bg-gray-100 border border-dashed border-gray-300 rounded-lg w-[300px] h-[300px] flex flex-col items-center justify-center">
             <FaQrcode className="h-20 w-20 text-gray-300 mb-3" />
-            <p className="text-gray-500 text-sm font-medium">Select course and class name</p>
-            <p className="text-gray-400 text-xs">Then click Generate or Deploy</p>
+            <p className="text-gray-500 text-sm font-medium">
+              Select course and class name
+            </p>
+            <p className="text-gray-400 text-xs">
+              Then click Generate or Deploy
+            </p>
           </div>
         )}
 
@@ -1502,27 +1627,37 @@ export const GenerateQrPage: React.FC = () => {
 
         {/* Action Buttons */}
         <div className="w-full flex flex-col gap-3">
-          <Button 
-            className="w-full" 
+          <Button
+            className="w-full"
             onClick={handleDeploy}
-            disabled={isGenerating || !className || !selectedCourseSection || courseSections.length === 0}
+            disabled={
+              isGenerating ||
+              !className ||
+              !selectedCourseSection ||
+              courseSections.length === 0
+            }
           >
             <FiRefreshCw className="mr-2 h-5 w-5" />
             Deploy QR Code (Full Screen)
           </Button>
           <div className="flex gap-3">
-            <Button 
+            <Button
               variant="outline"
-              className="flex-1" 
+              className="flex-1"
               onClick={generateQRCode}
-              disabled={isGenerating || !className || !selectedCourseSection || courseSections.length === 0}
+              disabled={
+                isGenerating ||
+                !className ||
+                !selectedCourseSection ||
+                courseSections.length === 0
+              }
             >
               <FiRefreshCw className="mr-2 h-4 w-4" />
               Regenerate
             </Button>
-            <Button 
-              variant="outline" 
-              className="flex-1" 
+            <Button
+              variant="outline"
+              className="flex-1"
               onClick={handleDownload}
               disabled={!qrCodeUrl}
             >
@@ -1535,7 +1670,9 @@ export const GenerateQrPage: React.FC = () => {
         {/* Info Card */}
         <div className="w-full bg-blue-50 border border-blue-200 rounded-lg p-4">
           <p className="text-xs text-blue-800">
-            <strong>💡 Tip:</strong> Click "Deploy QR Code" to show a large, full-screen QR code that students can easily scan. The validity timer starts when you deploy.
+            <strong>💡 Tip:</strong> Click "Deploy QR Code" to show a large,
+            full-screen QR code that students can easily scan. The validity
+            timer starts when you deploy.
           </p>
         </div>
       </CardContent>
@@ -1549,56 +1686,60 @@ export const GenerateQrPage: React.FC = () => {
 export const AttendanceRecordsPage: React.FC = () => {
   const { records, setRecords } = useDashboard();
   const [isRefreshing, setIsRefreshing] = useState(false);
-  
+
   // Get current year's January 1st
   const currentYear = new Date().getFullYear();
   const [dateFrom, setDateFrom] = useState(`${currentYear}-01-01`);
-  
+
   // Get today's date in YYYY-MM-DD format
-  const today = new Date().toISOString().split('T')[0];
+  const today = new Date().toISOString().split("T")[0];
   const [dateTo, setDateTo] = useState(today);
-  
+
   // Filter states
   const [selectedCourse, setSelectedCourse] = useState("All Courses");
   const [selectedSection, setSelectedSection] = useState("All Sections");
-  
+
   // Sorting state
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
   // Get unique courses and sections from records
   const uniqueCourseSections = useMemo(() => {
     const coursesSet = new Set<string>();
     const sectionsSet = new Set<string>();
-    
-    records.forEach(record => {
-      if (record.course && record.course !== 'N/A') coursesSet.add(record.course);
-      if (record.section && record.section !== 'N/A') sectionsSet.add(record.section);
+
+    records.forEach((record) => {
+      if (record.course && record.course !== "N/A")
+        coursesSet.add(record.course);
+      if (record.section && record.section !== "N/A")
+        sectionsSet.add(record.section);
     });
-    
+
     return {
-      courses: ['All Courses', ...Array.from(coursesSet).sort()],
-      sections: ['All Sections', ...Array.from(sectionsSet).sort()]
+      courses: ["All Courses", ...Array.from(coursesSet).sort()],
+      sections: ["All Sections", ...Array.from(sectionsSet).sort()],
     };
   }, [records]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
-      const { getInstructorAttendanceRecords } = await import('./services/adminService');
+      const { getInstructorAttendanceRecords } = await import(
+        "./services/adminService"
+      );
       const recordsData = await getInstructorAttendanceRecords();
-      
-      const mappedRecords: AttendanceRecord[] = recordsData.map(r => ({
+
+      const mappedRecords: AttendanceRecord[] = recordsData.map((r) => ({
         id: r.id,
         studentId: r.studentId,
         name: r.studentName,
         date: r.date,
         time: new Date(r.scannedAt).toLocaleTimeString(),
         status: r.status.toUpperCase() as "PRESENT" | "LATE" | "ABSENT",
-        course: r.course || 'N/A',
-        section: r.section || 'N/A',
-        className: r.className
+        course: r.course || "N/A",
+        section: r.section || "N/A",
+        className: r.className,
       }));
-      
+
       setRecords(mappedRecords);
       console.log("Attendance records refreshed:", mappedRecords.length);
     } catch (error) {
@@ -1616,44 +1757,47 @@ export const AttendanceRecordsPage: React.FC = () => {
   };
 
   const toggleSort = () => {
-    setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+    setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
   };
 
   const filteredRecords = useMemo(() => {
-    let filtered = records.filter(record => {
+    let filtered = records.filter((record) => {
       // Date filtering
       const recordDate = new Date(record.date);
       const fromDate = new Date(dateFrom);
       const toDate = new Date(dateTo);
       const withinDateRange = recordDate >= fromDate && recordDate <= toDate;
-      
+
       // Course filtering
-      const courseMatch = selectedCourse === "All Courses" || record.course === selectedCourse;
-      
+      const courseMatch =
+        selectedCourse === "All Courses" || record.course === selectedCourse;
+
       // Section filtering
-      const sectionMatch = selectedSection === "All Sections" || record.section === selectedSection;
-      
+      const sectionMatch =
+        selectedSection === "All Sections" ||
+        record.section === selectedSection;
+
       return withinDateRange && courseMatch && sectionMatch;
     });
-    
+
     // Sort by name
     filtered.sort((a, b) => {
       const nameA = a.name.toLowerCase();
       const nameB = b.name.toLowerCase();
-      if (sortOrder === 'asc') {
+      if (sortOrder === "asc") {
         return nameA < nameB ? -1 : nameA > nameB ? 1 : 0;
       } else {
         return nameA > nameB ? -1 : nameA < nameB ? 1 : 0;
       }
     });
-    
+
     return filtered;
   }, [records, dateFrom, dateTo, selectedCourse, selectedSection, sortOrder]);
 
   return (
     <div className="flex flex-col gap-6">
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between">
           <div>
             <CardTitle>Attendance Records</CardTitle>
             <CardDescription>
@@ -1665,9 +1809,12 @@ export const AttendanceRecordsPage: React.FC = () => {
             size="sm"
             onClick={handleRefresh}
             disabled={isRefreshing}
+            className="mt-4 sm:mt-0"
           >
-            <FiRefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-            {isRefreshing ? 'Refreshing...' : 'Refresh'}
+            <FiRefreshCw
+              className={`mr-2 h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
+            />
+            {isRefreshing ? "Refreshing..." : "Refresh"}
           </Button>
         </CardHeader>
         <CardContent>
@@ -1688,7 +1835,7 @@ export const AttendanceRecordsPage: React.FC = () => {
             </div>
             <div>
               <Label>Course</Label>
-              <CustomSelect 
+              <CustomSelect
                 value={selectedCourse}
                 onChange={(e) => setSelectedCourse(e.target.value)}
               >
@@ -1701,7 +1848,7 @@ export const AttendanceRecordsPage: React.FC = () => {
             </div>
             <div>
               <Label>Section</Label>
-              <CustomSelect 
+              <CustomSelect
                 value={selectedSection}
                 onChange={(e) => setSelectedSection(e.target.value)}
               >
@@ -1712,7 +1859,7 @@ export const AttendanceRecordsPage: React.FC = () => {
                 ))}
               </CustomSelect>
             </div>
-            <div className="flex gap-4 sm:col-span-2 lg:col-span-4">
+            <div className="flex flex-col sm:flex-row gap-4 sm:col-span-2 lg:col-span-4">
               <Button
                 type="button"
                 className="flex-1"
@@ -1720,9 +1867,9 @@ export const AttendanceRecordsPage: React.FC = () => {
               >
                 Apply Filters
               </Button>
-              <Button 
-                type="button" 
-                variant="outline" 
+              <Button
+                type="button"
+                variant="outline"
                 className="flex-1"
                 onClick={handleReset}
               >
@@ -1734,19 +1881,25 @@ export const AttendanceRecordsPage: React.FC = () => {
       </Card>
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between">
           <CardTitle>Attendance List</CardTitle>
           <Button
             variant="outline"
             size="sm"
             onClick={toggleSort}
+            className="mt-4 sm:mt-0"
           >
-            <FiArrowUp className={`mr-2 h-4 w-4 transition-transform ${sortOrder === 'desc' ? 'rotate-180' : ''}`} />
-            Sort by Name ({sortOrder === 'asc' ? 'A-Z' : 'Z-A'})
+            <FiArrowUp
+              className={`mr-2 h-4 w-4 transition-transform ${
+                sortOrder === "desc" ? "rotate-180" : ""
+              }`}
+            />
+            Sort by Name ({sortOrder === "asc" ? "A-Z" : "Z-A"})
           </Button>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto rounded-lg border relative">
+          {/* Desktop Table View */}
+          <div className="hidden md:block overflow-x-auto rounded-lg border relative">
             <table className="w-full text-sm">
               <thead className="bg-gray-50">
                 <tr>
@@ -1780,7 +1933,7 @@ export const AttendanceRecordsPage: React.FC = () => {
                       <td className="px-4 py-3">{record.name}</td>
                       <td className="px-4 py-3">
                         <span className="inline-flex items-center">
-                          {record.course} • Section {record.section}
+                          {record.course} - Section {record.section}
                         </span>
                       </td>
                       <td className="px-4 py-3">{record.date}</td>
@@ -1799,6 +1952,51 @@ export const AttendanceRecordsPage: React.FC = () => {
                 )}
               </tbody>
             </table>
+          </div>
+          {/* Mobile Card View */}
+          <div className="md:hidden space-y-4">
+            {filteredRecords.length > 0 ? (
+              filteredRecords.map((record) => (
+                <div
+                  key={record.id}
+                  className="bg-white p-4 rounded-lg border shadow-sm"
+                >
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="font-bold text-gray-800">{record.name}</p>
+                      <p className="text-xs text-gray-500">
+                        {record.studentId}
+                      </p>
+                    </div>
+                    <StatusBadge status={record.status} />
+                  </div>
+                  <div className="mt-4 border-t pt-4 space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Course:</span>
+                      <span className="font-medium text-gray-800">
+                        {record.course} - Section {record.section}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Date:</span>
+                      <span className="font-medium text-gray-800">
+                        {record.date}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Time:</span>
+                      <span className="font-medium text-gray-800">
+                        {record.time}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-gray-500">No records found.</p>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -1867,7 +2065,9 @@ export const StudentManagementPage: React.FC = () => {
             Add Student
           </Button>
         </div>
-        <div className="overflow-x-auto rounded-lg border relative">
+
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto rounded-lg border relative">
           <table className="w-full text-sm">
             <thead className="bg-gray-50">
               <tr>
@@ -1897,7 +2097,7 @@ export const StudentManagementPage: React.FC = () => {
                     <td className="px-4 py-3">{student.email}</td>
                     <td className="px-4 py-3">
                       <span className="inline-flex items-center">
-                        {student.course} • Section {student.section}
+                        {student.course} - Section {student.section}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right">
@@ -1906,7 +2106,7 @@ export const StudentManagementPage: React.FC = () => {
                           <FiMoreVertical className="h-4 w-4" />{" "}
                           {/* ICON RESTORED */}
                         </DropdownTrigger>
-                        <DropdownContent align="right">
+                        <DropdownContent>
                           <DropdownMenuItem
                             onClick={() => openEditModal(student)}
                           >
@@ -1937,6 +2137,61 @@ export const StudentManagementPage: React.FC = () => {
             </tbody>
           </table>
         </div>
+
+        {/* Mobile Card View */}
+        <div className="md:hidden space-y-4">
+          {filteredStudents.length > 0 ? (
+            filteredStudents.map((student) => (
+              <div
+                key={student.id}
+                className="bg-white p-4 rounded-lg border shadow-sm"
+              >
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="font-bold text-gray-800">{student.name}</p>
+                    <p className="text-xs text-gray-500">{student.id}</p>
+                  </div>
+                  <CustomDropdown>
+                    <DropdownTrigger>
+                      <FiMoreVertical className="h-5 w-5 text-gray-500" />
+                    </DropdownTrigger>
+                    <DropdownContent>
+                      <DropdownMenuItem onClick={() => openEditModal(student)}>
+                        <FiEdit2 className="mr-2 h-4 w-4" />
+                        Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => openDeleteModal(student)}
+                        className="text-red-600"
+                      >
+                        <FiTrash2 className="mr-2 h-4 w-4" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownContent>
+                  </CustomDropdown>
+                </div>
+                <div className="mt-4 border-t pt-4 space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Email:</span>
+                    <span className="font-medium text-gray-800 truncate">
+                      {student.email}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Course:</span>
+                    <span className="font-medium text-gray-800">
+                      {student.course} - Section {student.section}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-gray-500">No students found.</p>
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
@@ -1959,7 +2214,7 @@ export const SettingsPage: React.FC = () => {
   const [lateThreshold, setLateThreshold] = useState<number>(15); // Late threshold in minutes
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  
+
   // Admin account state
   const [adminEmail, setAdminEmail] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
@@ -1974,22 +2229,24 @@ export const SettingsPage: React.FC = () => {
   useEffect(() => {
     const fetchCoursesAndSettings = async () => {
       try {
-        const { db, auth } = await import('./firebase');
-        const { doc, getDoc } = await import('firebase/firestore');
+        const { db, auth } = await import("./firebase");
+        const { doc, getDoc } = await import("firebase/firestore");
         const user = auth.currentUser;
-        
+
         if (user) {
           // Set admin email from current user
           setAdminEmail(user.email || "");
-          
+
           // Fetch courses
-          const courseDoc = await getDoc(doc(db, 'instructorCourses', user.uid));
+          const courseDoc = await getDoc(
+            doc(db, "instructorCourses", user.uid)
+          );
           if (courseDoc.exists()) {
             setCourseSections(courseDoc.data().courseSections || []);
           }
-          
+
           // Fetch settings
-          const settingsDoc = await getDoc(doc(db, 'settings', user.uid));
+          const settingsDoc = await getDoc(doc(db, "settings", user.uid));
           if (settingsDoc.exists()) {
             const settingsData = settingsDoc.data();
             setLateThreshold(settingsData.lateThreshold || 15);
@@ -2009,29 +2266,35 @@ export const SettingsPage: React.FC = () => {
   // Monitor password change lockout status
   useEffect(() => {
     if (!adminEmail) return;
-    
+
     const checkLockout = () => {
-      const { locked, remainingTime } = isLockedOut(adminEmail, 'password-change');
+      const { locked, remainingTime } = isLockedOut(
+        adminEmail,
+        "password-change"
+      );
       setIsPasswordLocked(locked);
       setPasswordLockoutTime(remainingTime);
-      
-      if (!locked && passwordError?.includes('locked')) {
+
+      if (!locked && passwordError?.includes("locked")) {
         setPasswordError(null);
       }
     };
-    
+
     checkLockout();
-    
+
     const interval = setInterval(() => {
-      const { locked, remainingTime } = isLockedOut(adminEmail, 'password-change');
+      const { locked, remainingTime } = isLockedOut(
+        adminEmail,
+        "password-change"
+      );
       setIsPasswordLocked(locked);
       setPasswordLockoutTime(remainingTime);
-      
+
       if (!locked && isPasswordLocked) {
         setPasswordError(null);
       }
     }, 1000);
-    
+
     return () => clearInterval(interval);
   }, [adminEmail, isPasswordLocked, passwordError]);
 
@@ -2040,30 +2303,33 @@ export const SettingsPage: React.FC = () => {
       alert("Please enter both course and section");
       return;
     }
-    
+
     // Check if this course-section combination already exists
     const exists = courseSections.some(
-      cs => cs.course === newCourse.trim() && cs.section === newSection.trim()
+      (cs) => cs.course === newCourse.trim() && cs.section === newSection.trim()
     );
-    
+
     if (exists) {
       alert("This course-section combination already exists");
       return;
     }
-    
+
     try {
-      const { db, auth } = await import('./firebase');
-      const { doc, setDoc } = await import('firebase/firestore');
+      const { db, auth } = await import("./firebase");
+      const { doc, setDoc } = await import("firebase/firestore");
       const user = auth.currentUser;
-      
+
       if (user) {
-        const updatedCourseSections = [...courseSections, { 
-          course: newCourse.trim(), 
-          section: newSection.trim() 
-        }];
-        await setDoc(doc(db, 'instructorCourses', user.uid), {
+        const updatedCourseSections = [
+          ...courseSections,
+          {
+            course: newCourse.trim(),
+            section: newSection.trim(),
+          },
+        ];
+        await setDoc(doc(db, "instructorCourses", user.uid), {
           courseSections: updatedCourseSections,
-          updatedAt: new Date().toISOString()
+          updatedAt: new Date().toISOString(),
         });
         setCourseSections(updatedCourseSections);
         setNewCourse("");
@@ -2077,17 +2343,21 @@ export const SettingsPage: React.FC = () => {
 
   const handleDeleteCourseSection = async (courseSection: CourseSection) => {
     try {
-      const { db, auth } = await import('./firebase');
-      const { doc, setDoc } = await import('firebase/firestore');
+      const { db, auth } = await import("./firebase");
+      const { doc, setDoc } = await import("firebase/firestore");
       const user = auth.currentUser;
-      
+
       if (user) {
         const updatedCourseSections = courseSections.filter(
-          cs => !(cs.course === courseSection.course && cs.section === courseSection.section)
+          (cs) =>
+            !(
+              cs.course === courseSection.course &&
+              cs.section === courseSection.section
+            )
         );
-        await setDoc(doc(db, 'instructorCourses', user.uid), {
+        await setDoc(doc(db, "instructorCourses", user.uid), {
           courseSections: updatedCourseSections,
-          updatedAt: new Date().toISOString()
+          updatedAt: new Date().toISOString(),
         });
         setCourseSections(updatedCourseSections);
       }
@@ -2100,18 +2370,22 @@ export const SettingsPage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
-    
+
     try {
-      const { db, auth } = await import('./firebase');
-      const { doc, setDoc } = await import('firebase/firestore');
+      const { db, auth } = await import("./firebase");
+      const { doc, setDoc } = await import("firebase/firestore");
       const user = auth.currentUser;
-      
+
       if (user) {
-        await setDoc(doc(db, 'settings', user.uid), {
-          lateThreshold,
-          updatedAt: new Date().toISOString()
-        }, { merge: true }); // Use merge to preserve other settings if any
-        
+        await setDoc(
+          doc(db, "settings", user.uid),
+          {
+            lateThreshold,
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        ); // Use merge to preserve other settings if any
+
         alert("Settings saved successfully!");
       }
     } catch (error) {
@@ -2125,90 +2399,111 @@ export const SettingsPage: React.FC = () => {
   const handlePasswordUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordError(null);
-    
+
     // Check if locked out
-    const lockoutCheck = isLockedOut(adminEmail, 'password-change');
+    const lockoutCheck = isLockedOut(adminEmail, "password-change");
     if (lockoutCheck.locked) {
-      setPasswordError(`Too many failed attempts. Please try again in ${formatRemainingTime(lockoutCheck.remainingTime)}.`);
+      setPasswordError(
+        `Too many failed attempts. Please try again in ${formatRemainingTime(
+          lockoutCheck.remainingTime
+        )}.`
+      );
       return;
     }
-    
+
     // Validation
     if (!currentPassword) {
       setPasswordError("Current password is required");
       return;
     }
-    
+
     if (!newPassword || newPassword.length < 6) {
       setPasswordError("New password must be at least 6 characters");
       return;
     }
-    
+
     if (newPassword !== confirmPassword) {
       setPasswordError("New passwords do not match");
       return;
     }
-    
+
     setIsUpdatingPassword(true);
-    
+
     try {
-      const { auth } = await import('./firebase');
-      const { EmailAuthProvider, reauthenticateWithCredential, updatePassword } = await import('firebase/auth');
+      const { auth } = await import("./firebase");
+      const {
+        EmailAuthProvider,
+        reauthenticateWithCredential,
+        updatePassword,
+      } = await import("firebase/auth");
       const user = auth.currentUser;
-      
+
       if (!user || !user.email) {
         setPasswordError("No user logged in");
         setIsUpdatingPassword(false);
         return;
       }
-      
+
       // Re-authenticate user with current password
-      const credential = EmailAuthProvider.credential(user.email, currentPassword);
-      
+      const credential = EmailAuthProvider.credential(
+        user.email,
+        currentPassword
+      );
+
       try {
         await reauthenticateWithCredential(user, credential);
       } catch (error: any) {
         // Record failed attempt
-        const result = recordFailedAttempt(adminEmail, 'password-change');
-        
-        if (error.code === 'auth/wrong-password') {
+        const result = recordFailedAttempt(adminEmail, "password-change");
+
+        if (error.code === "auth/wrong-password") {
           if (result.locked) {
-            setPasswordError(`Too many failed attempts. Account locked for 3 minutes.`);
+            setPasswordError(
+              `Too many failed attempts. Account locked for 3 minutes.`
+            );
             setIsPasswordLocked(true);
             setPasswordLockoutTime(180);
           } else {
-            setPasswordError(`Current password is incorrect. (${result.attemptsLeft} attempts remaining)`);
+            setPasswordError(
+              `Current password is incorrect. (${result.attemptsLeft} attempts remaining)`
+            );
           }
-        } else if (error.code === 'auth/too-many-requests') {
+        } else if (error.code === "auth/too-many-requests") {
           setPasswordError("Too many failed attempts. Please try again later.");
         } else {
           if (result.locked) {
-            setPasswordError(`Too many failed attempts. Account locked for 3 minutes.`);
+            setPasswordError(
+              `Too many failed attempts. Account locked for 3 minutes.`
+            );
             setIsPasswordLocked(true);
             setPasswordLockoutTime(180);
           } else {
-            setPasswordError(`Failed to verify current password. (${result.attemptsLeft} attempts remaining)`);
+            setPasswordError(
+              `Failed to verify current password. (${result.attemptsLeft} attempts remaining)`
+            );
           }
         }
         setIsUpdatingPassword(false);
         return;
       }
-      
+
       // Update password
       await updatePassword(user, newPassword);
-      
+
       // Clear attempts on success
-      clearAttempts(adminEmail, 'password-change');
-      
+      clearAttempts(adminEmail, "password-change");
+
       // Clear form
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-      
+
       alert("Password updated successfully!");
     } catch (error: any) {
       console.error("Error updating password:", error);
-      setPasswordError(error.message || "Failed to update password. Please try again.");
+      setPasswordError(
+        error.message || "Failed to update password. Please try again."
+      );
     } finally {
       setIsUpdatingPassword(false);
     }
@@ -2237,8 +2532,16 @@ export const SettingsPage: React.FC = () => {
                 <Label htmlFor="system-name">
                   System Name <span className="text-red-500">*</span>
                 </Label>
-                <Input id="system-name" defaultValue="AttendScan" required disabled className="bg-gray-100" />
-                <p className="text-xs text-gray-500">System name is locked and cannot be changed</p>
+                <Input
+                  id="system-name"
+                  defaultValue="AttendScan"
+                  required
+                  disabled
+                  className="bg-gray-100"
+                />
+                <p className="text-xs text-gray-500">
+                  System name is locked and cannot be changed
+                </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="university-name">
@@ -2261,9 +2564,10 @@ export const SettingsPage: React.FC = () => {
                   Your Courses & Sections
                 </h3>
                 <p className="text-xs text-gray-500 mb-4">
-                  Add courses and sections that you teach. These will be available when adding students and generating QR codes.
+                  Add courses and sections that you teach. These will be
+                  available when adding students and generating QR codes.
                 </p>
-                
+
                 {/* Add Course-Section Form */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-4">
                   <Input
@@ -2278,9 +2582,9 @@ export const SettingsPage: React.FC = () => {
                     onChange={(e) => setNewSection(e.target.value)}
                     className="md:col-span-1"
                   />
-                  <Button 
-                    type="button" 
-                    onClick={handleAddCourseSection} 
+                  <Button
+                    type="button"
+                    onClick={handleAddCourseSection}
                     disabled={!newCourse.trim() || !newSection.trim()}
                     className="md:col-span-1"
                   >
@@ -2300,9 +2604,13 @@ export const SettingsPage: React.FC = () => {
                         className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200"
                       >
                         <div className="flex items-center gap-3">
-                          <span className="text-sm font-semibold text-gray-900">{cs.course}</span>
-                          <span className="text-xs text-gray-500">•</span>
-                          <span className="text-sm text-gray-700">Section {cs.section}</span>
+                          <span className="text-sm font-semibold text-gray-900">
+                            {cs.course}
+                          </span>
+                          <span className="text-xs text-gray-500">-</span>
+                          <span className="text-sm text-gray-700">
+                            Section {cs.section}
+                          </span>
                         </div>
                         <button
                           onClick={() => handleDeleteCourseSection(cs)}
@@ -2316,8 +2624,12 @@ export const SettingsPage: React.FC = () => {
                   </div>
                 ) : (
                   <div className="text-center py-8 bg-gray-50 rounded-lg border border-gray-200">
-                    <p className="text-sm text-gray-500">No courses added yet</p>
-                    <p className="text-xs text-gray-400 mt-1">Add your first course-section above</p>
+                    <p className="text-sm text-gray-500">
+                      No courses added yet
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Add your first course-section above
+                    </p>
                   </div>
                 )}
               </div>
@@ -2334,16 +2646,19 @@ export const SettingsPage: React.FC = () => {
                   </div>
                 ) : (
                   <>
-                    <Input 
-                      id="late-threshold" 
-                      type="number" 
+                    <Input
+                      id="late-threshold"
+                      type="number"
                       min="1"
                       max="60"
                       value={lateThreshold}
-                      onChange={(e) => setLateThreshold(parseInt(e.target.value) || 15)}
+                      onChange={(e) =>
+                        setLateThreshold(parseInt(e.target.value) || 15)
+                      }
                     />
                     <p className="text-sm text-gray-500">
-                      Mark student as LATE if they scan after this time. (Current: {lateThreshold} minutes)
+                      Mark student as LATE if they scan after this time.
+                      (Current: {lateThreshold} minutes)
                     </p>
                   </>
                 )}
@@ -2369,16 +2684,16 @@ export const SettingsPage: React.FC = () => {
                   This is your current email address used for login.
                 </p>
               </div>
-              
+
               <div className="border-t pt-4 mt-4">
                 <h3 className="text-lg font-semibold mb-4">Change Password</h3>
-                
+
                 {passwordError && (
                   <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
                     <p className="text-sm text-red-600">{passwordError}</p>
                   </div>
                 )}
-                
+
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="current-password">Current Password</Label>
@@ -2391,7 +2706,7 @@ export const SettingsPage: React.FC = () => {
                       disabled={isUpdatingPassword || isPasswordLocked}
                     />
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="new-password">New Password</Label>
                     <Input
@@ -2403,9 +2718,11 @@ export const SettingsPage: React.FC = () => {
                       disabled={isUpdatingPassword || isPasswordLocked}
                     />
                   </div>
-                  
+
                   <div className="space-y-2">
-                    <Label htmlFor="confirm-password">Confirm New Password</Label>
+                    <Label htmlFor="confirm-password">
+                      Confirm New Password
+                    </Label>
                     <Input
                       id="confirm-password"
                       type="password"
@@ -2417,17 +2734,24 @@ export const SettingsPage: React.FC = () => {
                   </div>
                 </div>
               </div>
-              
-              <Button 
-                type="submit" 
-                disabled={isUpdatingPassword || isPasswordLocked || !currentPassword || !newPassword || !confirmPassword}
-              >
-                {isPasswordLocked 
-                  ? `Locked - Try again in ${formatRemainingTime(passwordLockoutTime)}`
-                  : isUpdatingPassword 
-                    ? "Updating Password..." 
-                    : "Update Password"
+
+              <Button
+                type="submit"
+                disabled={
+                  isUpdatingPassword ||
+                  isPasswordLocked ||
+                  !currentPassword ||
+                  !newPassword ||
+                  !confirmPassword
                 }
+              >
+                {isPasswordLocked
+                  ? `Locked - Try again in ${formatRemainingTime(
+                      passwordLockoutTime
+                    )}`
+                  : isUpdatingPassword
+                  ? "Updating Password..."
+                  : "Update Password"}
               </Button>
             </form>
           </TabsContent>
@@ -2466,12 +2790,14 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
   useEffect(() => {
     const fetchCourseSections = async () => {
       try {
-        const { db, auth } = await import('./firebase');
-        const { doc, getDoc } = await import('firebase/firestore');
+        const { db, auth } = await import("./firebase");
+        const { doc, getDoc } = await import("firebase/firestore");
         const user = auth.currentUser;
-        
+
         if (user) {
-          const courseDoc = await getDoc(doc(db, 'instructorCourses', user.uid));
+          const courseDoc = await getDoc(
+            doc(db, "instructorCourses", user.uid)
+          );
           if (courseDoc.exists()) {
             // Try to get courseSections first, fallback to courses for backward compatibility
             const data = courseDoc.data();
@@ -2512,13 +2838,15 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
     try {
       if (isEditMode && student) {
         // Edit logic - update in Firestore
-        const { updateStudent } = await import('./services/adminService');
+        const { updateStudent } = await import("./services/adminService");
         const result = await updateStudent(student.id, formData);
-        
+
         if (result.success) {
           // Update local state
           setStudents((prev) =>
-            prev.map((s) => (s.id === student.id ? { ...student, ...formData } : s))
+            prev.map((s) =>
+              s.id === student.id ? { ...student, ...formData } : s
+            )
           );
           onClose();
         } else {
@@ -2526,9 +2854,9 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
         }
       } else {
         // Add logic - save to Firestore
-        const { addStudentToClass } = await import('./services/adminService');
+        const { addStudentToClass } = await import("./services/adminService");
         const result = await addStudentToClass(formData);
-        
+
         if (result.success) {
           // Add to local state with the generated ID
           const newStudent: Student = {
@@ -2591,11 +2919,13 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
             >
               <option value="">Select a course</option>
               {/* Get unique courses from courseSections */}
-              {Array.from(new Set(courseSections.map(cs => cs.course))).map((course) => (
-                <option key={course} value={course}>
-                  {course}
-                </option>
-              ))}
+              {Array.from(new Set(courseSections.map((cs) => cs.course))).map(
+                (course) => (
+                  <option key={course} value={course}>
+                    {course}
+                  </option>
+                )
+              )}
             </CustomSelect>
           ) : (
             <div>
@@ -2620,7 +2950,7 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
               <option value="">Select a section</option>
               {/* Filter sections based on selected course */}
               {courseSections
-                .filter(cs => cs.course === formData.course)
+                .filter((cs) => cs.course === formData.course)
                 .map((cs) => (
                   <option key={cs.section} value={cs.section}>
                     Section {cs.section}
@@ -2668,11 +2998,11 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
 
   const handleDelete = async () => {
     if (!student) return;
-    
+
     try {
-      const { removeStudent } = await import('./services/adminService');
+      const { removeStudent } = await import("./services/adminService");
       const result = await removeStudent(student.id);
-      
+
       if (result.success) {
         setStudents((prev) => prev.filter((s) => s.id !== student.id));
         onClose();
@@ -2741,29 +3071,30 @@ export const AdminLayout: React.FC = () => {
 
     const initAuthAndFetchData = async () => {
       try {
-        const { auth } = await import('./firebase');
-        const { onAuthStateChanged } = await import('firebase/auth');
-        
+        const { auth } = await import("./firebase");
+        const { onAuthStateChanged } = await import("firebase/auth");
+
         // Wait for auth state to be ready
         unsubscribe = onAuthStateChanged(auth, async (user) => {
           console.log("Auth state changed:", user ? user.uid : "No user");
-          
+
           if (!user) {
             console.log("No user authenticated, skipping data fetch");
             setIsLoading(false);
             return;
           }
-          
+
           // User is authenticated, fetch data
-          const { getRegisteredStudents, getInstructorAttendanceRecords } = await import('./services/adminService');
-          
+          const { getRegisteredStudents, getInstructorAttendanceRecords } =
+            await import("./services/adminService");
+
           console.log("Fetching dashboard data for user:", user.uid);
-          
+
           try {
             // Fetch registered students and attendance records
             const [studentsData, recordsData] = await Promise.all([
               getRegisteredStudents(),
-              getInstructorAttendanceRecords()
+              getInstructorAttendanceRecords(),
             ]);
 
             console.log("Registered students fetched:", studentsData.length);
@@ -2771,25 +3102,25 @@ export const AdminLayout: React.FC = () => {
             console.log("Sample attendance record:", recordsData[0]);
 
             // Map to the Student interface format
-            const mappedStudents: Student[] = studentsData.map(s => ({
+            const mappedStudents: Student[] = studentsData.map((s) => ({
               id: s.id,
               name: s.name,
               email: s.email,
-              course: s.course || 'N/A',
-              section: s.section || 'N/A'
+              course: s.course || "N/A",
+              section: s.section || "N/A",
             }));
 
             // Map to the AttendanceRecord interface format
-            const mappedRecords: AttendanceRecord[] = recordsData.map(r => ({
+            const mappedRecords: AttendanceRecord[] = recordsData.map((r) => ({
               id: r.id,
               studentId: r.studentId,
               name: r.studentName,
               date: r.date,
               time: new Date(r.scannedAt).toLocaleTimeString(),
               status: r.status.toUpperCase() as "PRESENT" | "LATE" | "ABSENT",
-              course: r.course || 'N/A',
-              section: r.section || 'N/A',
-              className: r.className
+              course: r.course || "N/A",
+              section: r.section || "N/A",
+              className: r.className,
             }));
 
             console.log("Mapped records:", mappedRecords);
@@ -2819,9 +3150,9 @@ export const AdminLayout: React.FC = () => {
   const stats = useMemo(() => {
     return {
       total: records.length,
-      present: records.filter(r => r.status === "PRESENT").length,
-      absent: records.filter(r => r.status === "ABSENT").length,
-      late: records.filter(r => r.status === "LATE").length,
+      present: records.filter((r) => r.status === "PRESENT").length,
+      absent: records.filter((r) => r.status === "ABSENT").length,
+      late: records.filter((r) => r.status === "LATE").length,
     };
   }, [records]);
 
@@ -2851,31 +3182,32 @@ export const AdminLayout: React.FC = () => {
   // Refresh data after student operations
   const refreshData = async () => {
     try {
-      const { getRegisteredStudents, getInstructorAttendanceRecords } = await import('./services/adminService');
-      
+      const { getRegisteredStudents, getInstructorAttendanceRecords } =
+        await import("./services/adminService");
+
       const [studentsData, recordsData] = await Promise.all([
         getRegisteredStudents(),
-        getInstructorAttendanceRecords()
+        getInstructorAttendanceRecords(),
       ]);
 
-      const mappedStudents: Student[] = studentsData.map(s => ({
+      const mappedStudents: Student[] = studentsData.map((s) => ({
         id: s.id,
         name: s.name,
         email: s.email,
-        course: s.course || 'N/A',
-        section: s.section || 'N/A'
+        course: s.course || "N/A",
+        section: s.section || "N/A",
       }));
 
-      const mappedRecords: AttendanceRecord[] = recordsData.map(r => ({
+      const mappedRecords: AttendanceRecord[] = recordsData.map((r) => ({
         id: r.id,
         studentId: r.studentId,
         name: r.studentName,
         date: r.date,
         time: new Date(r.scannedAt).toLocaleTimeString(),
         status: r.status.toUpperCase() as "PRESENT" | "LATE" | "ABSENT",
-        course: r.course || 'N/A',
-        section: r.section || 'N/A',
-        className: r.className
+        course: r.course || "N/A",
+        section: r.section || "N/A",
+        className: r.className,
       }));
 
       setStudents(mappedStudents);
@@ -2927,19 +3259,29 @@ export const AdminLayout: React.FC = () => {
 
         {/* --- MODALS --- */}
         {/* Modals are rendered here, but controlled by context */}
-        <StudentFormModal isOpen={isAddModalOpen} onClose={() => { closeModals(); refreshData(); }} />
+        <StudentFormModal
+          isOpen={isAddModalOpen}
+          onClose={() => {
+            closeModals();
+            refreshData();
+          }}
+        />
         <StudentFormModal
           student={selectedStudent}
           isOpen={isEditModalOpen}
-          onClose={() => { closeModals(); refreshData(); }}
+          onClose={() => {
+            closeModals();
+            refreshData();
+          }}
         />
         <DeleteConfirmModal
           student={selectedStudent}
           isOpen={isDeleteModalOpen}
-          onClose={() => { closeModals(); refreshData(); }}
+          onClose={() => {
+            closeModals();
+            refreshData();
+          }}
         />
-
-        {/* We are not using Toaster since we didn't install shadcn */}
       </div>
     </DashboardContext.Provider>
   );

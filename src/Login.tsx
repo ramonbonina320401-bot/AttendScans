@@ -78,7 +78,7 @@ export default function LoginComponent() {
       // This prevents someone from selecting "student" and logging in with an instructor/admin account.
       if (role !== userRole) {
         await signOut(auth);
-        setError(`Account role mismatch. This account is registered as '${userRole}'. Please select the correct role.`);
+        setError("Login failed. Please check your credentials and role.");
         setSubmitting(false);
         return;
       }

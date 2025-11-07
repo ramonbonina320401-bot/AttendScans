@@ -622,13 +622,32 @@ export default function LoginComponent() {
 
           {/* Register Link now uses <Link> */}
           <p className="text-center text-sm text-gray-600">
-            Don’t have an account?{" "}
+            Don't have an account?{" "}
             <Link
               to="/signup"
               className="text-blue-600 font-medium hover:underline focus:outline-none focus:ring-2 focus:ring-blue-400 rounded"
             >
               Register here
             </Link>
+          </p>
+
+          {/* Resend Verification Email Link */}
+          <p className="text-center text-sm text-gray-600">
+            Need to verify your email?{" "}
+            <button
+              type="button"
+              onClick={() => {
+                if (!email) {
+                  setError("Please enter your email address first");
+                  return;
+                }
+                setVerificationEmail(email);
+                setShowVerificationNeeded(true);
+              }}
+              className="text-blue-600 font-medium hover:underline focus:outline-none focus:ring-2 focus:ring-blue-400 rounded"
+            >
+              Resend verification email
+            </button>
           </p>
         </form>
       </div>

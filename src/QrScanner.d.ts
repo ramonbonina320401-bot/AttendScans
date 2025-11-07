@@ -7,6 +7,7 @@ type Html5QrcodeError = {
 interface QrScannerProps {
     onScanSuccess: (decodedText: string, result: Html5QrcodeResult) => void;
     onScanFailure?: (error: Html5QrcodeError) => void;
+    shouldStopAfterScan?: boolean;
 }
 declare const QrScanner: React.FC<QrScannerProps>;
 export default QrScanner;

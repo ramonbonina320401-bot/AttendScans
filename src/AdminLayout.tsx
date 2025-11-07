@@ -1481,6 +1481,7 @@ export const GenerateQrPage: React.FC = () => {
           </div>
           <div className="space-y-2">
             <Label htmlFor="duration-input">Duration</Label>
+            {/* QR Code validity duration */}
             <CustomSelect
               id="duration-input"
               value={duration.toString()}

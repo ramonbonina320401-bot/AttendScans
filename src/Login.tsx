@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import { signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { auth, db } from "./firebase";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { doc, getDoc } from "firebase/firestore";
@@ -68,9 +68,11 @@ export default function LoginComponent() {
         return;
       }
 
-      // Fetch user role from Firestore
+      // Fetch user role and metadata from Firestore
       const userDoc = await getDoc(doc(db, "users", user.uid));
       if (!userDoc.exists()) {
+        // If there's no user profile, sign out and show an error
+        await signOut(auth);
         setError("User data not found. Please contact support.");
         setSubmitting(false);
         return;
@@ -78,6 +80,26 @@ export default function LoginComponent() {
 
       const userData = userDoc.data();
       const userRole = userData.role;
+
+      // Ensure the role the user selected in the login form matches the role in Firestore.
+      // This prevents someone from selecting "student" and logging in with an instructor/admin account.
+      if (role !== userRole) {
+        await signOut(auth);
+        setError(`Account role mismatch. This account is registered as '${userRole}'. Please select the correct role.`);
+        setSubmitting(false);
+        return;
+      }
+
+      // If logging in as a student, verify the entered student ID matches the stored record
+      if (userRole === "student") {
+        const storedStudentId = (userData.studentId ?? "").toString().trim();
+        if (!studentNum || studentNum.toString().trim() !== storedStudentId) {
+          await signOut(auth);
+          setError("Student ID does not match our records. Please use the Student ID you registered with.");
+          setSubmitting(false);
+          return;
+        }
+      }
 
       // Success! Store user info if needed
       console.log("Logged in user:", user);

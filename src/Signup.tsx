@@ -266,11 +266,22 @@ export default function Signup() {
       // Fetch and validate the access key from Firestore
       try {
         const settingsDoc = await getDoc(doc(db, 'settings', 'system'));
+        
+        if (!settingsDoc.exists()) {
+          console.log('Settings document does not exist, using default key');
+        }
+        
         const instructorAccessKey = settingsDoc.exists() 
-          ? settingsDoc.data().instructorAccessKey 
+          ? (settingsDoc.data().instructorAccessKey || 'INSTRUCTOR2024').toString().trim()
           : 'INSTRUCTOR2024'; // Default fallback
 
-        if (instructorFormData.accessKey !== instructorAccessKey) {
+        const enteredKey = instructorFormData.accessKey.trim();
+        
+        console.log('Entered key:', `"${enteredKey}"`);
+        console.log('Expected key:', `"${instructorAccessKey}"`);
+        console.log('Keys match:', enteredKey === instructorAccessKey);
+
+        if (enteredKey !== instructorAccessKey) {
           // Record failed attempt
           const result = recordFailedAttempt('instructor-signup', 'instructor-access-key');
           
@@ -292,6 +303,7 @@ export default function Signup() {
 
         // Clear attempts on successful validation
         clearAttempts('instructor-signup', 'instructor-access-key');
+        console.log('Access key validated successfully!');
       } catch (error) {
         console.error("Error validating access key:", error);
         setErrors(prev => ({ 

@@ -27,6 +27,7 @@ export default function LoginComponent() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [studentIdError, setStudentIdError] = useState<string | null>(null);
 
   // State for forgot password modal
   const [showForgotPassword, setShowForgotPassword] = useState(false);
@@ -62,6 +63,23 @@ export default function LoginComponent() {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
+
+    // Validate student ID format if role is student
+    if (role === "student") {
+      if (!studentNum || studentNum.trim().length === 0) {
+        setError("Please enter your Student ID.");
+        setStudentIdError("Student ID is required");
+        setSubmitting(false);
+        return;
+      }
+      
+      if (!/^\d{2}-\d{4}$/.test(studentNum)) {
+        setError("Please enter a valid Student ID in format 00-0000.");
+        setStudentIdError("Invalid format. Must be 00-0000");
+        setSubmitting(false);
+        return;
+      }
+    }
 
     try {
       // Sign in with Firebase
@@ -149,6 +167,7 @@ export default function LoginComponent() {
   const handleRoleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setRole(e.target.value);
     setError(null); // Clear error on role change
+    setStudentIdError(null); // Clear student ID error
     setPassword(""); // Clear password on role change
     setStudentNum(""); // Clear student num on role change
   };
@@ -170,7 +189,18 @@ export default function LoginComponent() {
     formatted = formatted.slice(0, 7);
     
     setStudentNum(formatted);
-    setError(null); // Clear error on input change
+    setError(null); // Clear general error on input change
+    
+    // Validate format and show specific error
+    if (formatted.length === 0) {
+      setStudentIdError(null); // No error if empty (required validation will handle)
+    } else if (formatted.length < 7) {
+      setStudentIdError("Student ID must be 6 digits (00-0000)");
+    } else if (!/^\d{2}-\d{4}$/.test(formatted)) {
+      setStudentIdError("Invalid format. Use 00-0000");
+    } else {
+      setStudentIdError(null); // Valid format
+    }
   };
 
   // Handle forgot password
@@ -292,9 +322,18 @@ export default function LoginComponent() {
                 onChange={handleStudentIdChange}
                 placeholder="00-0000"
                 maxLength={7}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
+                className={`w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 transition-shadow ${
+                  studentIdError
+                    ? "border-red-300 focus:ring-red-500 focus:border-red-500"
+                    : "border-gray-300 focus:ring-blue-500 focus:border-blue-500"
+                }`}
                 required={role === "student"}
               />
+              {studentIdError && (
+                <p className="text-red-500 text-xs mt-1 animate-shake">
+                  {studentIdError}
+                </p>
+              )}
             </div>
           )}
 

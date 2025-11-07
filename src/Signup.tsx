@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { createUserWithEmailAndPassword, sendEmailVerification } from "firebase/auth";
+import { createUserWithEmailAndPassword, sendEmailVerification, signOut } from "firebase/auth";
 import { doc, setDoc, getDoc } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import { useAuthState } from "react-firebase-hooks/auth";
@@ -72,6 +72,14 @@ export default function Signup() {
     const checkAuth = async () => {
       if (user && !loading) {
         try {
+          // Don't auto-redirect unverified users. Some flows (signup) keep the
+          // newly-created user signed in briefly which would otherwise cause
+          // an immediate navigation and bypass the verification step shown in
+          // the modal. Require email to be verified before redirecting.
+          if (!user.emailVerified) {
+            return;
+          }
+
           const userDoc = await getDoc(doc(db, "users", user.uid));
           if (userDoc.exists()) {
             const userRole = userDoc.data().role;
@@ -360,6 +368,15 @@ export default function Signup() {
       console.log("Saving user data to Firestore...");
       await setDoc(doc(db, "users", user.uid), userData);
       console.log("User data saved successfully");
+
+      // Sign the user out so we don't auto-redirect them while they're
+      // still unverified. The login page will enforce verification on sign-in.
+      console.log("Signing out user to prevent auto-redirect...");
+      await signOut(auth);
+      console.log("User signed out successfully");
+      
+      // Small delay to ensure auth state fully propagates
+      await new Promise(resolve => setTimeout(resolve, 100));
 
       // Show verification modal instead of alert
       setSignupEmail(email);

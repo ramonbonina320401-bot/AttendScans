@@ -52,6 +52,13 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     return <Navigate to="/login" replace />;
   }
 
+  // Check if email is verified - CRITICAL security check
+  if (!user.emailVerified) {
+    // Sign out unverified users and redirect to login
+    auth.signOut();
+    return <Navigate to="/login" replace />;
+  }
+
   // Check role if required
   if (requiredRole && userRole !== requiredRole) {
     // Redirect based on actual role

@@ -46,6 +46,12 @@ export default function LoginComponent() {
   const [resetError, setResetError] = useState<string | null>(null);
   const [resetSuccess, setResetSuccess] = useState<string | null>(null);
 
+  // State for email verification
+  const [showVerificationNeeded, setShowVerificationNeeded] = useState(false);
+  const [verificationEmail, setVerificationEmail] = useState("");
+  const [isResendingVerification, setIsResendingVerification] = useState(false);
+  const [verificationMessage, setVerificationMessage] = useState<string | null>(null);
+
   // Redirect if already logged in
   useEffect(() => {
     const checkAuth = async () => {
@@ -179,7 +185,9 @@ export default function LoginComponent() {
       // Check if email is verified (after role check so we get the correct error first)
       if (!user.emailVerified) {
         await signOut(auth);
-        setError("Please verify your email before logging in.");
+        setVerificationEmail(email);
+        setShowVerificationNeeded(true);
+        setError("Email verification required. Please check your inbox and verify your email address.");
         setSubmitting(false);
         return;
       }
@@ -339,6 +347,55 @@ export default function LoginComponent() {
       setResetError(errorMessage);
     } finally {
       setResetLoading(false);
+    }
+  };
+
+  // Handle resend verification email
+  const handleResendVerification = async () => {
+    setVerificationMessage(null);
+    setIsResendingVerification(true);
+
+    try {
+      // Sign in temporarily to get the user object
+      const { sendEmailVerification } = await import("firebase/auth");
+      const userCredential = await signInWithEmailAndPassword(auth, verificationEmail, password);
+      const user = userCredential.user;
+
+      if (user.emailVerified) {
+        // Email is already verified
+        setVerificationMessage("✅ Your email is already verified! Please try logging in again.");
+        setShowVerificationNeeded(false);
+        await signOut(auth);
+        setIsResendingVerification(false);
+        return;
+      }
+
+      // Send verification email
+      await sendEmailVerification(user);
+      await signOut(auth);
+      
+      setVerificationMessage("✅ Verification email sent! Please check your inbox (and spam folder).");
+      
+      setTimeout(() => {
+        setVerificationMessage(null);
+      }, 5000);
+    } catch (err: any) {
+      console.error("Resend verification error:", err);
+      
+      let errorMessage = "Failed to resend verification email.";
+      if (err.code === "auth/wrong-password" || err.code === "auth/invalid-credential") {
+        errorMessage = "Unable to resend. Please check your password and try again.";
+      } else if (err.code === "auth/too-many-requests") {
+        errorMessage = "Too many attempts. Please try again later.";
+      }
+      
+      setVerificationMessage(`❌ ${errorMessage}`);
+      
+      setTimeout(() => {
+        setVerificationMessage(null);
+      }, 5000);
+    } finally {
+      setIsResendingVerification(false);
     }
   };
 
@@ -568,6 +625,85 @@ export default function LoginComponent() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Email Verification Needed Modal */}
+      {showVerificationNeeded && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 md:p-8 max-w-md w-full animate-fade-in-down">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
+                <span className="text-2xl">📧</span>
+                Email Verification Required
+              </h2>
+              <button
+                onClick={() => {
+                  setShowVerificationNeeded(false);
+                  setVerificationMessage(null);
+                }}
+                className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p className="text-sm text-gray-700 mb-2">
+                  <strong>Your account needs email verification before you can log in.</strong>
+                </p>
+                <p className="text-sm text-gray-600">
+                  A verification email was sent to:
+                </p>
+                <p className="text-sm font-semibold text-blue-600 mt-1">
+                  {verificationEmail}
+                </p>
+              </div>
+
+              <div className="text-sm text-gray-600 space-y-2">
+                <p className="font-medium">Steps to verify:</p>
+                <ol className="list-decimal list-inside space-y-1 ml-2">
+                  <li>Check your email inbox (and spam folder)</li>
+                  <li>Click the verification link in the email</li>
+                  <li>Return here and log in again</li>
+                </ol>
+              </div>
+
+              {verificationMessage && (
+                <div className={`p-3 rounded-lg text-sm ${
+                  verificationMessage.startsWith('✅')
+                    ? 'bg-green-50 text-green-800 border border-green-200'
+                    : 'bg-red-50 text-red-800 border border-red-200'
+                }`}>
+                  {verificationMessage}
+                </div>
+              )}
+
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={handleResendVerification}
+                  disabled={isResendingVerification}
+                  className="w-full bg-blue-600 text-white py-2.5 rounded-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {isResendingVerification ? "Sending..." : "Resend Verification Email"}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowVerificationNeeded(false);
+                    setVerificationMessage(null);
+                  }}
+                  className="w-full bg-gray-200 text-gray-700 py-2.5 rounded-lg hover:bg-gray-300 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400"
+                >
+                  Close
+                </button>
+              </div>
+
+              <p className="text-xs text-gray-500 text-center">
+                💡 Tip: Check your spam folder if you don't see the email
+              </p>
+            </div>
           </div>
         </div>
       )}

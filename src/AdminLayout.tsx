@@ -1949,29 +1949,41 @@ export const SettingsPage: React.FC = () => {
   const [newCourse, setNewCourse] = useState("");
   const [newSection, setNewSection] = useState("");
   const [isLoadingCourses, setIsLoadingCourses] = useState(true);
+  const [lateThreshold, setLateThreshold] = useState<number>(15); // Late threshold in minutes
+  const [isLoadingSettings, setIsLoadingSettings] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
 
-  // Fetch courses on mount
+  // Fetch courses and settings on mount
   useEffect(() => {
-    const fetchCourses = async () => {
+    const fetchCoursesAndSettings = async () => {
       try {
         const { db, auth } = await import('./firebase');
         const { doc, getDoc } = await import('firebase/firestore');
         const user = auth.currentUser;
         
         if (user) {
+          // Fetch courses
           const courseDoc = await getDoc(doc(db, 'instructorCourses', user.uid));
           if (courseDoc.exists()) {
             setCourseSections(courseDoc.data().courseSections || []);
           }
+          
+          // Fetch settings
+          const settingsDoc = await getDoc(doc(db, 'settings', user.uid));
+          if (settingsDoc.exists()) {
+            const settingsData = settingsDoc.data();
+            setLateThreshold(settingsData.lateThreshold || 15);
+          }
         }
       } catch (error) {
-        console.error("Error fetching courses:", error);
+        console.error("Error fetching data:", error);
       } finally {
         setIsLoadingCourses(false);
+        setIsLoadingSettings(false);
       }
     };
 
-    fetchCourses();
+    fetchCoursesAndSettings();
   }, []);
 
   const handleAddCourseSection = async () => {
@@ -2036,10 +2048,29 @@ export const SettingsPage: React.FC = () => {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Save logic here
-    alert("Settings Saved!"); // Using alert for simplicity
+    setIsSaving(true);
+    
+    try {
+      const { db, auth } = await import('./firebase');
+      const { doc, setDoc } = await import('firebase/firestore');
+      const user = auth.currentUser;
+      
+      if (user) {
+        await setDoc(doc(db, 'settings', user.uid), {
+          lateThreshold,
+          updatedAt: new Date().toISOString()
+        }, { merge: true }); // Use merge to preserve other settings if any
+        
+        alert("Settings saved successfully!");
+      }
+    } catch (error) {
+      console.error("Error saving settings:", error);
+      alert("Failed to save settings. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -2156,12 +2187,29 @@ export const SettingsPage: React.FC = () => {
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
                 <Label htmlFor="late-threshold">Late Threshold (minutes)</Label>
-                <Input id="late-threshold" type="number" defaultValue="15" />
-                <p className="text-sm text-gray-500">
-                  Mark student as LATE if they scan after this time.
-                </p>
+                {isLoadingSettings ? (
+                  <div className="flex items-center justify-center py-4">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
+                  </div>
+                ) : (
+                  <>
+                    <Input 
+                      id="late-threshold" 
+                      type="number" 
+                      min="1"
+                      max="60"
+                      value={lateThreshold}
+                      onChange={(e) => setLateThreshold(parseInt(e.target.value) || 15)}
+                    />
+                    <p className="text-sm text-gray-500">
+                      Mark student as LATE if they scan after this time. (Current: {lateThreshold} minutes)
+                    </p>
+                  </>
+                )}
               </div>
-              <Button type="submit">Save Changes</Button>
+              <Button type="submit" disabled={isSaving || isLoadingSettings}>
+                {isSaving ? "Saving..." : "Save Changes"}
+              </Button>
             </form>
           </TabsContent>
 

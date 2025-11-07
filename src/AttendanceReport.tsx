@@ -23,6 +23,7 @@ interface AttendanceRecord {
   date: string;
   subject: string;
   status: "Present" | "Absent" | "Late";
+  scannedAt?: string; // ISO timestamp of when attendance was marked
 }
 
 // --- Component Props ---
@@ -143,20 +144,44 @@ const AttendanceReport: React.FC<AttendanceReportProps> = ({
             ) : (
               // List State
               <ul className="divide-y divide-gray-200 mt-6">
-                {history.map((record) => (
-                  <li
-                    key={record.id}
-                    className="flex justify-between items-center py-4"
-                  >
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">
-                        {record.subject}
-                      </p>
-                      <p className="text-sm text-gray-500">{record.date}</p>
-                    </div>
-                    <AttendanceTag status={record.status} />
-                  </li>
-                ))}
+                {history.map((record) => {
+                  // Format the scanned time
+                  let timeDisplay = '';
+                  if (record.scannedAt) {
+                    const scanDate = new Date(record.scannedAt);
+                    const hours = scanDate.getHours();
+                    const minutes = scanDate.getMinutes().toString().padStart(2, '0');
+                    const ampm = hours >= 12 ? 'PM' : 'AM';
+                    const displayHours = hours % 12 || 12;
+                    timeDisplay = `${displayHours}:${minutes} ${ampm}`;
+                  }
+
+                  return (
+                    <li
+                      key={record.id}
+                      className="flex justify-between items-center py-4"
+                    >
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-gray-900">
+                          {record.subject}
+                        </p>
+                        <div className="flex items-center gap-3 mt-1">
+                          <p className="text-sm text-gray-500">{record.date}</p>
+                          {timeDisplay && (
+                            <>
+                              <span className="text-gray-300">•</span>
+                              <p className="text-sm text-gray-500 flex items-center gap-1">
+                                <Clock size={12} className="text-gray-400" />
+                                {timeDisplay}
+                              </p>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <AttendanceTag status={record.status} />
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>

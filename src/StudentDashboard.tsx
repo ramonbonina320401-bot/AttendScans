@@ -252,12 +252,13 @@ const StudentDashboard: React.FC = () => {
     const present = attendanceRecords.filter(r => r.status === 'present').length;
     const percentage = totalClasses > 0 ? Math.round((present / totalClasses) * 100) : 0;
 
-    // Format attendance records for the report
+    // Format attendance records for the report - pass scannedAt for time display
     const formattedHistory = attendanceRecords.map((record, index) => ({
       id: index.toString(),
       date: record.date,
-      subject: record.className,
+      subject: `${record.course} - ${record.section}`, // Show course and section
       status: "Present" as const,
+      scannedAt: record.scannedAt, // Pass the scan timestamp
     }));
 
     return (

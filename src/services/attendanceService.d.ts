@@ -21,6 +21,7 @@ export interface AttendanceRecord {
     status: 'present';
     course: string;
     section: string;
+    timestamp?: number;
 }
 export declare const generateQRCodeData: (className: string, duration: number | undefined, course: string, section: string) => Promise<QRCodeData>;
 export declare const verifyQRCode: (qrData: QRCodeData) => boolean;

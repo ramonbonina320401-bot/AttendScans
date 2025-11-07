@@ -9,6 +9,7 @@ interface AttendanceRecord {
     date: string;
     subject: string;
     status: "Present" | "Absent" | "Late";
+    scannedAt?: string;
 }
 interface AttendanceReportProps {
     onBack: () => void;

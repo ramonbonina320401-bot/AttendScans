@@ -20,11 +20,12 @@ export interface AttendanceRecord {
   classId: string;
   className: string;
   instructorId: string;
-  scannedAt: string;
+  scannedAt: string; // ISO timestamp of when the scan happened
   date: string;
   status: 'present';
   course: string; // Course name (e.g., "CS101")
   section: string; // Section identifier (e.g., "A", "B")
+  timestamp?: number; // Unix timestamp for sorting
 }
 
 // Generate a secure random session ID (8 characters: uppercase letters and numbers)
@@ -167,17 +168,19 @@ export const markAttendance = async (qrData: QRCodeData): Promise<{ success: boo
     }
 
     // Create attendance record
+    const now = new Date();
     const attendanceRecord: AttendanceRecord = {
       studentId: user.uid,
       studentName: `${userData.firstName} ${userData.lastName}`,
       classId: qrData.classId,
       className: qrData.className,
       instructorId: qrData.instructorId,
-      scannedAt: new Date().toISOString(),
+      scannedAt: now.toISOString(),
       date: qrData.date,
       status: 'present',
       course: qrData.course,
-      section: qrData.section
+      section: qrData.section,
+      timestamp: now.getTime() // Unix timestamp for easy sorting
     };
 
     // Save to Firestore
@@ -231,6 +234,14 @@ export const getStudentAttendance = async (studentId?: string) => {
     
     snapshot.forEach((doc) => {
       records.push(doc.data() as AttendanceRecord);
+    });
+
+    // Sort by timestamp (most recent first)
+    // If timestamp doesn't exist (old records), fall back to scannedAt
+    records.sort((a, b) => {
+      const timeA = a.timestamp || new Date(a.scannedAt).getTime();
+      const timeB = b.timestamp || new Date(b.scannedAt).getTime();
+      return timeB - timeA; // Descending order (newest first)
     });
 
     return records;

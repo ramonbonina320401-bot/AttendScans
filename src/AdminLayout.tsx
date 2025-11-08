@@ -46,8 +46,9 @@ export interface Student {
   id: string;
   name: string;
   email: string;
-  course: string;
-  section: string;
+  program: string;  // e.g., "BSIT", "BSCS"
+  course: string;   // e.g., "IM101", "CS201"
+  section: string;  // e.g., "1-4", "A"
 }
 
 export interface AttendanceRecord {
@@ -2199,6 +2200,7 @@ export const StudentManagementPage: React.FC = () => {
           const studentData = {
             name: fullName.trim(),
             email: row['EMAIL']?.toString().trim().toLowerCase() || '',
+            program: program,
             course: course,
             section: section,
           };
@@ -2355,7 +2357,7 @@ export const StudentManagementPage: React.FC = () => {
                   EMAIL
                 </th>
                 <th className="px-4 py-3 text-left font-medium text-gray-600">
-                  COURSE & SECTION
+                  PROGRAM - COURSE - SECTION
                 </th>
                 <th className="px-4 py-3 text-right font-medium text-gray-600">
                   ACTIONS
@@ -2371,7 +2373,7 @@ export const StudentManagementPage: React.FC = () => {
                     <td className="px-4 py-3">{student.email}</td>
                     <td className="px-4 py-3">
                       <span className="inline-flex items-center">
-                        {student.course} - Section {student.section}
+                        {student.program || 'N/A'} - {student.course} - Section {student.section}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right">
@@ -2452,9 +2454,9 @@ export const StudentManagementPage: React.FC = () => {
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-500">Course:</span>
+                    <span className="text-gray-500">Program:</span>
                     <span className="font-medium text-gray-800">
-                      {student.course} - Section {student.section}
+                      {student.program || 'N/A'} - {student.course} - Section {student.section}
                     </span>
                   </div>
                 </div>
@@ -3081,6 +3083,7 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
   const [formData, setFormData] = useState<Omit<Student, "id">>({
     name: "",
     email: "",
+    program: "",
     course: "",
     section: "",
   });
@@ -3124,7 +3127,7 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
     if (student && isOpen) {
       setFormData(student);
     } else {
-      setFormData({ name: "", email: "", course: "", section: "" });
+      setFormData({ name: "", email: "", program: "", course: "", section: "" });
     }
   }, [student, isOpen]);
 
@@ -3214,7 +3217,20 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
           />
         </div>
         <div>
-          <Label htmlFor="course">Course</Label>
+          <Label htmlFor="program">Program</Label>
+          <Input
+            id="program"
+            value={formData.program}
+            onChange={handleChange}
+            placeholder="e.g., BSIT, BSCS, BSBA"
+            required
+          />
+          <p className="text-xs text-gray-500 mt-1">
+            Enter the degree program (e.g., BSIT, BSCS, BSBA)
+          </p>
+        </div>
+        <div>
+          <Label htmlFor="course">Course Code</Label>
           {isLoadingCourses ? (
             <Input value="Loading courses..." disabled />
           ) : courseSections.length > 0 ? (
@@ -3224,7 +3240,7 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
               onChange={handleChange}
               required
             >
-              <option value="">Select a course</option>
+              <option value="">Select a course code</option>
               {/* Get unique courses from courseSections */}
               {Array.from(new Set(courseSections.map((cs) => cs.course))).map(
                 (course) => (
@@ -3413,6 +3429,7 @@ export const AdminLayout: React.FC = () => {
               id: s.id,
               name: s.name,
               email: s.email,
+              program: s.program || "N/A",
               course: s.course || "N/A",
               section: s.section || "N/A",
             }));
@@ -3501,6 +3518,7 @@ export const AdminLayout: React.FC = () => {
         id: s.id,
         name: s.name,
         email: s.email,
+        program: s.program || "N/A",
         course: s.course || "N/A",
         section: s.section || "N/A",
       }));

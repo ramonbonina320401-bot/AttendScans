@@ -1224,6 +1224,8 @@ const StatCard: React.FC<StatCardProps> = ({
  * 2. GENERATE QR CODE PAGE
  */
 export const GenerateQrPage: React.FC = () => {
+  const navigate = useNavigate();
+  const { students } = useDashboard();
   const [qrCodeUrl, setQrCodeUrl] = useState<string>("");
   const [sessionData, setSessionData] = useState<any>(null);
   const [selectedCourseSection, setSelectedCourseSection] =
@@ -1238,6 +1240,8 @@ export const GenerateQrPage: React.FC = () => {
   const [courseSections, setCourseSections] = useState<CourseSection[]>([]);
   const [isLoadingCourses, setIsLoadingCourses] = useState(true);
   const [lateThreshold, setLateThreshold] = useState<number>(15); // Grace period in minutes
+  const [showSetupModal, setShowSetupModal] = useState(false);
+  const [setupStep, setSetupStep] = useState<"courses" | "students" | null>(null);
 
   // Fetch instructor's courses and settings (late threshold) on mount
   useEffect(() => {
@@ -1279,6 +1283,19 @@ export const GenerateQrPage: React.FC = () => {
 
     fetchCourses();
   }, []);
+
+  // Check if instructor needs to add courses or students
+  useEffect(() => {
+    if (isLoadingCourses) return;
+
+    if (courseSections.length === 0) {
+      setSetupStep("courses");
+      setShowSetupModal(true);
+    } else if (students.length === 0) {
+      setSetupStep("students");
+      setShowSetupModal(true);
+    }
+  }, [isLoadingCourses, courseSections.length, students.length]);
 
   const generateQRCode = async () => {
     if (!selectedCourseSection) {
@@ -1621,6 +1638,83 @@ export const GenerateQrPage: React.FC = () => {
                 disabled={endVerificationCode.toLowerCase() !== "redeploy"}
               >
                 End Deployment
+              </Button>
+            </div>
+          </div>
+        </CustomModal>
+
+        {/* Setup Wizard Modal */}
+        <CustomModal
+          isOpen={showSetupModal}
+          onClose={() => setShowSetupModal(false)}
+        >
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="flex-shrink-0 p-3 bg-blue-100 rounded-full">
+                <FiAlertTriangle className="h-6 w-6 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {setupStep === "courses" ? "Add Courses First" : "Add Students First"}
+                </h3>
+                <p className="text-sm text-gray-500">
+                  You need to complete setup before generating QR codes
+                </p>
+              </div>
+            </div>
+
+            {setupStep === "courses" && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p className="text-sm text-blue-800 mb-3">
+                  <strong>📚 Step 1: Add Your Courses</strong>
+                </p>
+                <p className="text-sm text-blue-700">
+                  Before you can generate QR codes, you need to add at least one course with Program, Course Code, and Section.
+                </p>
+                <ul className="list-disc list-inside text-sm text-blue-700 mt-2 space-y-1">
+                  <li>Go to <strong>Settings → Courses</strong></li>
+                  <li>Click "Add Course"</li>
+                  <li>Fill in Program (e.g., BSIT), Course Code (e.g., IM101), and Section (e.g., 1-4)</li>
+                </ul>
+              </div>
+            )}
+
+            {setupStep === "students" && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <p className="text-sm text-green-800 mb-3">
+                  <strong>👥 Step 2: Add Your Students</strong>
+                </p>
+                <p className="text-sm text-green-700">
+                  You have courses set up! Now add students who will scan the QR codes.
+                </p>
+                <ul className="list-disc list-inside text-sm text-green-700 mt-2 space-y-1">
+                  <li>Go to <strong>Student Management</strong></li>
+                  <li>Click "Add Student" or "Import Excel"</li>
+                  <li>Students must match your course/section to mark attendance</li>
+                </ul>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setShowSetupModal(false)}
+              >
+                Remind Me Later
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={() => {
+                  setShowSetupModal(false);
+                  if (setupStep === "courses") {
+                    navigate("/dashboard/settings");
+                  } else {
+                    navigate("/dashboard/students");
+                  }
+                }}
+              >
+                {setupStep === "courses" ? "Go to Settings" : "Go to Student Management"}
               </Button>
             </div>
           </div>

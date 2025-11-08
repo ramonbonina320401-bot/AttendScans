@@ -87,6 +87,52 @@ const StudentDashboard: React.FC = () => {
     fetchStudentData();
   }, [navigate]);
 
+  // --- Inactivity Auto-Logout (Student) ---
+  useEffect(() => {
+    const TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
+    let timer: number | undefined;
+
+    const logoutForInactivity = async () => {
+      try {
+        sessionStorage.setItem("inactiveLogout", "1");
+        await signOut(auth);
+      } catch (e) {
+        console.error("Error during inactivity sign out", e);
+      } finally {
+        navigate("/login?inactive=1", { replace: true });
+      }
+    };
+
+    const resetTimer = () => {
+      if (timer) window.clearTimeout(timer);
+      timer = window.setTimeout(logoutForInactivity, TIMEOUT_MS);
+    };
+
+    const activityEvents: (keyof DocumentEventMap | keyof WindowEventMap)[] = [
+      "mousemove",
+      "mousedown",
+      "keydown",
+      "scroll",
+      "touchstart",
+      "visibilitychange",
+    ];
+
+    const handleActivity = () => {
+      // Don't reset if already processing sign out
+      if (!isProcessing) resetTimer();
+    };
+
+    activityEvents.forEach((evt) => document.addEventListener(evt, handleActivity));
+    resetTimer();
+
+    return () => {
+      if (timer) window.clearTimeout(timer);
+      activityEvents.forEach((evt) =>
+        document.removeEventListener(evt, handleActivity)
+      );
+    };
+  }, [navigate, isProcessing]);
+
   // --- Handlers ---
 
   const handleScanSuccess = async (decodedText: string) => {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { signInWithEmailAndPassword, signOut, sendPasswordResetEmail } from "firebase/auth";
 import { auth, db } from "./firebase";
 import { useAuthState } from "react-firebase-hooks/auth";
@@ -22,6 +22,7 @@ const SuccessPopup = ({ message }: { message: string }) => (
 // --- Login Component ---
 export default function LoginComponent() {
   const navigate = useNavigate(); // Initialize the navigation hook
+  const location = useLocation();
   const [user, loading] = useAuthState(auth);
 
   // State for form fields
@@ -53,6 +54,20 @@ export default function LoginComponent() {
   const [verificationEmail, setVerificationEmail] = useState("");
   const [isResendingVerification, setIsResendingVerification] = useState(false);
   const [verificationMessage, setVerificationMessage] = useState<string | null>(null);
+  // Inactivity popup state
+  const [showInactivePopup, setShowInactivePopup] = useState(false);
+
+  // Detect inactivity flag via query param or sessionStorage set by dashboard
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const inactiveParam = params.get("inactive");
+    const sessionFlag = sessionStorage.getItem("inactiveLogout");
+    if (inactiveParam === "1" || sessionFlag === "1") {
+      setShowInactivePopup(true);
+      // Clear flag so it doesn't persist on manual refresh
+      sessionStorage.removeItem("inactiveLogout");
+    }
+  }, [location.search]);
 
   // Redirect if already logged in
   useEffect(() => {
@@ -505,6 +520,21 @@ export default function LoginComponent() {
       )}
 
       <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-6 md:p-8 transform transition-all">
+        {showInactivePopup && (
+          <div className="mb-4 p-3 rounded-lg border border-yellow-300 bg-yellow-50 text-sm text-yellow-800 flex items-start gap-2">
+            <span className="text-xl leading-none">⚠️</span>
+            <div className="flex-1">
+              <p className="font-semibold">You were logged out due to inactivity.</p>
+              <p>Please log in again to continue.</p>
+            </div>
+            <button
+              onClick={() => setShowInactivePopup(false)}
+              className="text-yellow-700 hover:text-yellow-900 font-medium ml-2"
+            >
+              ×
+            </button>
+          </div>
+        )}
         <div className="text-center mb-6">
           <h1 className="text-2xl font-semibold text-gray-800">
             📋 Welcome To AttendScan

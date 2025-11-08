@@ -489,6 +489,48 @@ const Topbar: React.FC<{ onMenuClick: () => void }> = ({ onMenuClick }) => {
   const notificationRef = useRef<HTMLDivElement>(null);
   const { students, records } = useDashboard();
 
+  // Inactivity Auto-Logout for Admin/Instructor
+  useEffect(() => {
+    const TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
+    let timer: number | undefined;
+
+    const logoutForInactivity = async () => {
+      try {
+        sessionStorage.setItem("inactiveLogout", "1");
+        await signOut(auth);
+      } catch (e) {
+        console.error("Error during inactivity sign out", e);
+      } finally {
+        navigate("/login?inactive=1", { replace: true });
+      }
+    };
+
+    const resetTimer = () => {
+      if (timer) window.clearTimeout(timer);
+      timer = window.setTimeout(logoutForInactivity, TIMEOUT_MS);
+    };
+
+    const activityEvents: (keyof DocumentEventMap | keyof WindowEventMap)[] = [
+      "mousemove",
+      "mousedown",
+      "keydown",
+      "scroll",
+      "touchstart",
+      "visibilitychange",
+    ];
+
+    const handleActivity = () => resetTimer();
+    activityEvents.forEach((evt) => document.addEventListener(evt, handleActivity));
+    resetTimer();
+
+    return () => {
+      if (timer) window.clearTimeout(timer);
+      activityEvents.forEach((evt) =>
+        document.removeEventListener(evt, handleActivity)
+      );
+    };
+  }, [navigate]);
+
   // Handle logout
   const handleLogout = async () => {
     try {

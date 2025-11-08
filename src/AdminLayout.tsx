@@ -2478,12 +2478,14 @@ export const StudentManagementPage: React.FC = () => {
  */
 
 interface CourseSection {
+  program: string;
   course: string;
   section: string;
 }
 
 export const SettingsPage: React.FC = () => {
   const [courseSections, setCourseSections] = useState<CourseSection[]>([]);
+  const [newProgram, setNewProgram] = useState("");
   const [newCourse, setNewCourse] = useState("");
   const [newSection, setNewSection] = useState("");
   const [isLoadingCourses, setIsLoadingCourses] = useState(true);
@@ -2577,18 +2579,21 @@ export const SettingsPage: React.FC = () => {
   }, [adminEmail, isPasswordLocked, passwordError]);
 
   const handleAddCourseSection = async () => {
-    if (!newCourse.trim() || !newSection.trim()) {
-      alert("Please enter both course and section");
+    if (!newProgram.trim() || !newCourse.trim() || !newSection.trim()) {
+      alert("Please enter program, course code, and section");
       return;
     }
 
-    // Check if this course-section combination already exists
+    // Check if this program-course-section combination already exists
     const exists = courseSections.some(
-      (cs) => cs.course === newCourse.trim() && cs.section === newSection.trim()
+      (cs) => 
+        cs.program === newProgram.trim() && 
+        cs.course === newCourse.trim() && 
+        cs.section === newSection.trim()
     );
 
     if (exists) {
-      alert("This course-section combination already exists");
+      alert("This program-course-section combination already exists");
       return;
     }
 
@@ -2601,6 +2606,7 @@ export const SettingsPage: React.FC = () => {
         const updatedCourseSections = [
           ...courseSections,
           {
+            program: newProgram.trim(),
             course: newCourse.trim(),
             section: newSection.trim(),
           },
@@ -2610,6 +2616,7 @@ export const SettingsPage: React.FC = () => {
           updatedAt: new Date().toISOString(),
         });
         setCourseSections(updatedCourseSections);
+        setNewProgram("");
         setNewCourse("");
         setNewSection("");
       }
@@ -2874,15 +2881,21 @@ export const SettingsPage: React.FC = () => {
                 </p>
 
                 {/* Add Course-Section Form */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-4">
                   <Input
-                    placeholder="Course (e.g., CS101)"
+                    placeholder="Program (e.g., BSIT, BSCS)"
+                    value={newProgram}
+                    onChange={(e) => setNewProgram(e.target.value)}
+                    className="md:col-span-1"
+                  />
+                  <Input
+                    placeholder="Course Code (e.g., IM101)"
                     value={newCourse}
                     onChange={(e) => setNewCourse(e.target.value)}
                     className="md:col-span-1"
                   />
                   <Input
-                    placeholder="Section (e.g., A, B, 1)"
+                    placeholder="Section (e.g., 1-4)"
                     value={newSection}
                     onChange={(e) => setNewSection(e.target.value)}
                     className="md:col-span-1"
@@ -2890,11 +2903,11 @@ export const SettingsPage: React.FC = () => {
                   <Button
                     type="button"
                     onClick={handleAddCourseSection}
-                    disabled={!newCourse.trim() || !newSection.trim()}
+                    disabled={!newProgram.trim() || !newCourse.trim() || !newSection.trim()}
                     className="md:col-span-1"
                   >
                     <FiPlus className="mr-2 h-4 w-4" />
-                    Add Course-Section
+                    Add Course
                   </Button>
                 </div>
 
@@ -2909,10 +2922,14 @@ export const SettingsPage: React.FC = () => {
                         className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200"
                       >
                         <div className="flex items-center gap-3">
+                          <span className="text-sm font-bold text-blue-700 bg-blue-50 px-2 py-1 rounded">
+                            {cs.program}
+                          </span>
+                          <span className="text-xs text-gray-400">→</span>
                           <span className="text-sm font-semibold text-gray-900">
                             {cs.course}
                           </span>
-                          <span className="text-xs text-gray-500">-</span>
+                          <span className="text-xs text-gray-400">→</span>
                           <span className="text-sm text-gray-700">
                             Section {cs.section}
                           </span>
@@ -2933,7 +2950,7 @@ export const SettingsPage: React.FC = () => {
                       No courses added yet
                     </p>
                     <p className="text-xs text-gray-400 mt-1">
-                      Add your first course-section above
+                      Add your first course above
                     </p>
                   </div>
                 )}

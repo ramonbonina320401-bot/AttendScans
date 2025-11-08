@@ -286,7 +286,7 @@ const StudentDashboard: React.FC = () => {
       id: index.toString(),
       date: record.date,
       subject: `${record.course} - ${record.section}`, // Show course and section
-      status: "Present" as const,
+      status: record.status === "late" ? "Late" as const : "Present" as const,
       scannedAt: record.scannedAt, // Pass the scan timestamp
     }));
 

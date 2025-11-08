@@ -2214,6 +2214,7 @@ export const SettingsPage: React.FC = () => {
   const [lateThreshold, setLateThreshold] = useState<number>(15); // Late threshold in minutes
   const [isLoadingSettings, setIsLoadingSettings] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [universityName, setUniversityName] = useState("University Name");
 
   // Admin account state
   const [adminEmail, setAdminEmail] = useState("");
@@ -2250,6 +2251,7 @@ export const SettingsPage: React.FC = () => {
           if (settingsDoc.exists()) {
             const settingsData = settingsDoc.data();
             setLateThreshold(settingsData.lateThreshold || 15);
+            setUniversityName(settingsData.universityName || "University Name");
           }
         }
       } catch (error) {
@@ -2377,16 +2379,40 @@ export const SettingsPage: React.FC = () => {
       const user = auth.currentUser;
 
       if (user) {
-        await setDoc(
-          doc(db, "settings", user.uid),
-          {
-            lateThreshold,
-            updatedAt: new Date().toISOString(),
-          },
-          { merge: true }
-        ); // Use merge to preserve other settings if any
+        // Get form data
+        const form = e.target as HTMLFormElement;
+        const universityNameInput = form.querySelector('#university-name') as HTMLInputElement;
+        const lateThresholdInput = form.querySelector('#late-threshold') as HTMLInputElement;
 
-        alert("Settings saved successfully!");
+        // Determine which form was submitted based on which fields exist
+        const isGeneralForm = universityNameInput !== null;
+        const isAttendanceForm = lateThresholdInput !== null;
+
+        if (isGeneralForm) {
+          // Save general settings (university name)
+          const newUniversityName = universityNameInput.value.trim();
+          await setDoc(
+            doc(db, "settings", user.uid),
+            {
+              universityName: newUniversityName,
+              updatedAt: new Date().toISOString(),
+            },
+            { merge: true }
+          );
+          setUniversityName(newUniversityName);
+          alert("General settings saved successfully!");
+        } else if (isAttendanceForm) {
+          // Save attendance settings (late threshold)
+          await setDoc(
+            doc(db, "settings", user.uid),
+            {
+              lateThreshold,
+              updatedAt: new Date().toISOString(),
+            },
+            { merge: true }
+          );
+          alert("Attendance settings saved successfully!");
+        }
       }
     } catch (error) {
       console.error("Error saving settings:", error);
@@ -2523,7 +2549,7 @@ export const SettingsPage: React.FC = () => {
             <TabsTrigger value="general">General</TabsTrigger>
             <TabsTrigger value="courses">Courses</TabsTrigger>
             <TabsTrigger value="attendance">Attendance</TabsTrigger>
-            <TabsTrigger value="admin">Admin Account</TabsTrigger>
+            <TabsTrigger value="admin">Instructor Account</TabsTrigger>
           </TabsList>
 
           <TabsContent value="general" className="pt-6">
@@ -2549,11 +2575,14 @@ export const SettingsPage: React.FC = () => {
                 </Label>
                 <Input
                   id="university-name"
-                  defaultValue="University Name"
+                  value={universityName}
+                  onChange={(e) => setUniversityName(e.target.value)}
                   required
                 />
               </div>
-              <Button type="submit">Save Changes</Button>
+              <Button type="submit" disabled={isSaving}>
+                {isSaving ? "Saving..." : "Save Changes"}
+              </Button>
             </form>
           </TabsContent>
 

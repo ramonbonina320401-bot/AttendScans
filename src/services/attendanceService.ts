@@ -22,7 +22,7 @@ export interface AttendanceRecord {
   instructorId: string;
   scannedAt: string; // ISO timestamp of when the scan happened
   date: string;
-  status: 'present';
+  status: 'present' | 'late';
   course: string; // Course name (e.g., "CS101")
   section: string; // Section identifier (e.g., "A", "B")
   timestamp?: number; // Unix timestamp for sorting
@@ -167,8 +167,22 @@ export const markAttendance = async (qrData: QRCodeData): Promise<{ success: boo
       return { success: false, message: `Attendance already marked for ${qrData.className} today` };
     }
 
-    // Create attendance record
+    // Check if student is late based on instructor's late threshold setting
     const now = new Date();
+    const qrCodeCreationTime = new Date(qrData.timestamp);
+    const currentTime = now;
+    const timeDiffMinutes = (currentTime.getTime() - qrCodeCreationTime.getTime()) / (1000 * 60);
+
+    // Fetch instructor's late threshold setting
+    const instructorSettingsDoc = await getDoc(doc(db, 'settings', qrData.instructorId));
+    const lateThreshold = instructorSettingsDoc.exists() 
+      ? instructorSettingsDoc.data().lateThreshold || 15 
+      : 15; // Default to 15 minutes if not set
+
+    // Determine status based on time difference
+    const attendanceStatus = timeDiffMinutes > lateThreshold ? 'late' : 'present';
+
+    // Create attendance record
     const attendanceRecord: AttendanceRecord = {
       studentId: user.uid,
       studentName: `${userData.firstName} ${userData.lastName}`,
@@ -177,7 +191,7 @@ export const markAttendance = async (qrData: QRCodeData): Promise<{ success: boo
       instructorId: qrData.instructorId,
       scannedAt: now.toISOString(),
       date: qrData.date,
-      status: 'present',
+      status: attendanceStatus,
       course: qrData.course,
       section: qrData.section,
       timestamp: now.getTime() // Unix timestamp for easy sorting
@@ -186,7 +200,11 @@ export const markAttendance = async (qrData: QRCodeData): Promise<{ success: boo
     // Save to Firestore
     await addDoc(collection(db, 'attendance'), attendanceRecord);
 
-    return { success: true, message: "Attendance marked successfully!" };
+    const successMessage = attendanceStatus === 'late' 
+      ? `Attendance marked as LATE for ${qrData.className}. You scanned ${Math.round(timeDiffMinutes)} minutes after the QR code was generated.`
+      : "Attendance marked successfully!";
+
+    return { success: true, message: successMessage };
   } catch (error: any) {
     console.error("Error marking attendance:", error);
     return { success: false, message: error.message || "Failed to mark attendance" };

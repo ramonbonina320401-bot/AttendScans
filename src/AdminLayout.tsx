@@ -37,6 +37,7 @@ import {
   FiRefreshCw,
   FiAlertTriangle,
   FiArrowUp,
+  FiHelpCircle,
 } from "react-icons/fi";
 import { FaQrcode } from "react-icons/fa";
 // Date formatting is done inline with native JS, no import needed
@@ -938,6 +939,16 @@ const Sidebar: React.FC = () => {
       <nav className="flex-1 p-4 space-y-2">
         {navItems.map((item) => {
           const Icon = item.icon as React.ElementType; // Assert type now
+          const tourAttr =
+            item.label === "Generate QR Code"
+              ? "nav-generate-qr"
+              : item.label === "Settings"
+              ? "nav-settings"
+              : item.label === "Attendance Records"
+              ? "nav-records"
+              : item.label === "Student Management"
+              ? "nav-students"
+              : undefined;
           return (
             <NavLink
               key={item.to}
@@ -947,6 +958,7 @@ const Sidebar: React.FC = () => {
                 `flex items-center p-3 rounded-lg text-gray-600 hover:bg-gray-100 text-sm font-medium
                  ${isActive ? "bg-gray-100 text-gray-900" : ""}`
               }
+              data-tour={tourAttr}
             >
               {/* --- RENDER ICON CORRECTLY --- */}
               <Icon className="w-5 h-5 mr-3 flex-shrink-0" />
@@ -993,6 +1005,16 @@ const MobileSidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
         <nav className="flex-1 p-4 space-y-2">
           {navItems.map((item) => {
             const Icon = item.icon as React.ElementType; // Assert type now
+            const tourAttr =
+              item.label === "Generate QR Code"
+                ? "nav-generate-qr"
+                : item.label === "Settings"
+                ? "nav-settings"
+                : item.label === "Attendance Records"
+                ? "nav-records"
+                : item.label === "Student Management"
+                ? "nav-students"
+                : undefined;
             return (
               <NavLink
                 key={item.to}
@@ -1003,6 +1025,7 @@ const MobileSidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
                   `flex items-center p-3 rounded-lg text-gray-600 hover:bg-gray-100 text-sm font-medium
                    ${isActive ? "bg-gray-100 text-gray-900" : ""}`
                 }
+                data-tour={tourAttr}
               >
                 {/* --- RENDER ICON CORRECTLY --- */}
                 <Icon className="w-5 h-5 mr-3 flex-shrink-0" />
@@ -1680,7 +1703,7 @@ export const GenerateQrPage: React.FC = () => {
               <option value="300">5 hours</option>
             </CustomSelect>
           </div>
-          <div className="space-y-1">
+          <div className="space-y-1" data-tour="grace-period">
             <Label>Grace Period (Late Threshold)</Label>
             <Input
               value={`${lateThreshold} minutes`}
@@ -2004,7 +2027,7 @@ export const AttendanceRecordsPage: React.FC = () => {
         <CardContent>
           {/* Desktop Table View */}
           <div className="hidden md:block overflow-x-auto rounded-lg border relative">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm" data-tour="attendance-table">
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-4 py-3 text-left font-medium text-gray-600">
@@ -2505,7 +2528,7 @@ export const StudentManagementPage: React.FC = () => {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            <Button className="w-full sm:w-auto" onClick={openAddModal}>
+            <Button className="w-full sm:w-auto" onClick={openAddModal} data-tour="add-student-btn">
               <FiPlus className="mr-2 h-4 w-4" />
               Add Student
             </Button>
@@ -2596,7 +2619,7 @@ export const StudentManagementPage: React.FC = () => {
 
         {/* Desktop Table View */}
         <div className="hidden md:block overflow-x-auto rounded-lg border relative">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm" data-tour="students-table">
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-4 py-3">

@@ -37,9 +37,11 @@ import {
   FiRefreshCw,
   FiAlertTriangle,
   FiArrowUp,
-  FiHelpCircle,
 } from "react-icons/fi";
 import { FaQrcode } from "react-icons/fa";
+import { GuidedTour } from "./components/GuidedTour";
+import { instructorTourSteps } from "./components/tourSteps";
+import { HelpTooltip } from "./components/HelpTooltip";
 // Date formatting is done inline with native JS, no import needed
 
 // --- TYPE DEFINITIONS ---
@@ -475,7 +477,7 @@ TabsContent.displayName = "TabsContent";
 
 // --- LAYOUT COMPONENTS (Sidebar, Topbar) ---
 
-const Topbar: React.FC<{ onMenuClick: () => void }> = ({ onMenuClick }) => {
+const Topbar: React.FC<{ onMenuClick: () => void; onReplayTour?: () => void }> = ({ onMenuClick, onReplayTour }) => {
   const navigate = useNavigate();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -855,6 +857,17 @@ const Topbar: React.FC<{ onMenuClick: () => void }> = ({ onMenuClick }) => {
                 >
                   Settings
                 </Link>
+                {onReplayTour && (
+                  <button
+                    onClick={() => {
+                      setDropdownOpen(false);
+                      onReplayTour();
+                    }}
+                    className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                  >
+                    🎓 Replay Tour
+                  </button>
+                )}
                 <hr className="my-1 border-gray-200" />
                 <button
                   onClick={() => {
@@ -1482,8 +1495,12 @@ export const GenerateQrPage: React.FC = () => {
                   {/* Session ID Display */}
                   <div className="bg-blue-50 border-2 border-blue-300 rounded-xl px-6 py-5 w-full max-w-lg mb-6">
                     <div className="text-center">
-                      <p className="text-sm font-medium text-blue-800 mb-2">
-                        📱 Can't scan? Use this Session ID:
+                      <p className="text-sm font-medium text-blue-800 mb-2 inline-flex items-center justify-center">
+                        📱 Can't scan? Use this Session ID
+                        <HelpTooltip
+                          term="Session ID"
+                          definition="A unique 8-character code for this attendance session. Students who can't scan the QR code can enter this code manually on their dashboard to mark attendance."
+                        />
                       </p>
                       <div className="bg-white rounded-lg px-6 py-4 border-2 border-blue-200">
                         <p className="text-3xl md:text-4xl font-bold font-mono text-blue-900 tracking-wider">
@@ -1649,7 +1666,13 @@ export const GenerateQrPage: React.FC = () => {
         {/* Configuration Inputs */}
         <div className="w-full space-y-4 border-t pt-4">
           <div className="space-y-2">
-            <Label htmlFor="course-input">Program • Course • Section</Label>
+            <Label htmlFor="course-input" className="inline-flex items-center">
+              Program • Course • Section
+              <HelpTooltip
+                term="Program / Course / Section"
+                definition="Students must be enrolled in the exact same Program, Course, and Section to scan this QR code. This ensures only your students can mark attendance. Set these in Settings → Courses."
+              />
+            </Label>
             {isLoadingCourses ? (
               <Input value="Loading..." disabled className="w-full" />
             ) : courseSections.length > 0 ? (
@@ -1704,7 +1727,13 @@ export const GenerateQrPage: React.FC = () => {
             </CustomSelect>
           </div>
           <div className="space-y-1" data-tour="grace-period">
-            <Label>Grace Period (Late Threshold)</Label>
+            <Label className="inline-flex items-center">
+              Grace Period (Late Threshold)
+              <HelpTooltip
+                term="Grace Period"
+                definition="The time window students have to scan after class starts and still be marked 'present'. This is set in Settings → General. Students scanning after this window are marked 'late'."
+              />
+            </Label>
             <Input
               value={`${lateThreshold} minutes`}
               disabled
@@ -3485,7 +3514,13 @@ export const SettingsPage: React.FC = () => {
           <TabsContent value="attendance" className="pt-6">
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="late-threshold">Late Threshold (minutes)</Label>
+                <Label htmlFor="late-threshold" className="inline-flex items-center">
+                  Late Threshold (minutes)
+                  <HelpTooltip
+                    term="Late Threshold / Grace Period"
+                    definition="How many minutes after class starts can students scan and still be marked 'present'. After this time, they're marked 'late'. For example: 15 minutes means students have until 15 minutes after class begins."
+                  />
+                </Label>
                 {isLoadingSettings ? (
                   <div className="flex items-center justify-center py-4">
                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
@@ -3918,6 +3953,7 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
 // This component now holds all the state and provides it to the pages.
 export const AdminLayout: React.FC = () => {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [showTour, setShowTour] = useState(false);
 
   // --- CENTRALIZED STATE ---
   const [students, setStudents] = useState<Student[]>([]);
@@ -3929,6 +3965,31 @@ export const AdminLayout: React.FC = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+
+  // Check if first-time user (show tour)
+  useEffect(() => {
+    const hasSeenTour = localStorage.getItem("instructorTourCompleted");
+    if (!hasSeenTour) {
+      // Delay tour start to ensure DOM is ready
+      const timer = setTimeout(() => setShowTour(true), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
+  const handleTourComplete = () => {
+    localStorage.setItem("instructorTourCompleted", "true");
+    setShowTour(false);
+  };
+
+  const handleTourSkip = () => {
+    localStorage.setItem("instructorTourCompleted", "true");
+    setShowTour(false);
+  };
+
+  const handleReplayTour = () => {
+    localStorage.removeItem("instructorTourCompleted");
+    setShowTour(true);
+  };
 
   // Fetch data from Firebase on mount
   useEffect(() => {
@@ -4119,12 +4180,21 @@ export const AdminLayout: React.FC = () => {
         />
 
         <div className="flex-1 flex flex-col lg:pl-64">
-          <Topbar onMenuClick={() => setIsMobileSidebarOpen(true)} />
+          <Topbar onMenuClick={() => setIsMobileSidebarOpen(true)} onReplayTour={handleReplayTour} />
           <main className="flex-1 p-4 lg:p-6">
             {/* Router renders the matching page component here */}
             <Outlet />
           </main>
         </div>
+
+        {/* --- GUIDED TOUR --- */}
+        {showTour && (
+          <GuidedTour
+            steps={instructorTourSteps}
+            onComplete={handleTourComplete}
+            onSkip={handleTourSkip}
+          />
+        )}
 
         {/* --- MODALS --- */}
         {/* Modals are rendered here, but controlled by context */}

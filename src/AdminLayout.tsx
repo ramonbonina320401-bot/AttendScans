@@ -2051,9 +2051,10 @@ export const StudentManagementPage: React.FC = () => {
       const XLSX = await import('xlsx');
       
       // Create template data with headers and example rows
+      // Using the 00-0000 format for Student ID
       const templateData = [
         {
-          'STUDENT ID': '2021-00001',
+          'STUDENT ID': '21-1234',
           'LAST NAME': 'Doe',
           'FIRST NAME': 'John',
           'MIDDLE INITIAL': 'A',
@@ -2063,7 +2064,7 @@ export const StudentManagementPage: React.FC = () => {
           'SECTION': '1-4'
         },
         {
-          'STUDENT ID': '2021-00002',
+          'STUDENT ID': '21-5678',
           'LAST NAME': 'Smith',
           'FIRST NAME': 'Jane',
           'MIDDLE INITIAL': 'B',
@@ -2073,7 +2074,7 @@ export const StudentManagementPage: React.FC = () => {
           'SECTION': 'A'
         },
         {
-          'STUDENT ID': '',
+          'STUDENT ID': '22-0001',
           'LAST NAME': '',
           'FIRST NAME': '',
           'MIDDLE INITIAL': '',
@@ -2086,6 +2087,16 @@ export const StudentManagementPage: React.FC = () => {
 
       // Create workbook and worksheet
       const worksheet = XLSX.utils.json_to_sheet(templateData);
+      
+      // Format Student ID column as text to preserve the dash
+      const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
+      for (let row = range.s.r + 1; row <= range.e.r; row++) {
+        const cellAddress = XLSX.utils.encode_cell({ r: row, c: 0 });
+        if (worksheet[cellAddress]) {
+          worksheet[cellAddress].t = 's'; // Set cell type to string
+          worksheet[cellAddress].z = '@'; // Set format to text
+        }
+      }
       
       // Set column widths
       worksheet['!cols'] = [
@@ -2104,6 +2115,8 @@ export const StudentManagementPage: React.FC = () => {
 
       // Generate Excel file and trigger download
       XLSX.writeFile(workbook, 'Student_Import_Template.xlsx');
+      
+      alert('📥 Template downloaded!\n\n💡 TIP: Student ID format is 00-0000 (e.g., 21-1234, 22-5678)\nMake sure to keep the dash when entering IDs.');
     } catch (error) {
       console.error('Error creating template:', error);
       alert('Failed to download template. Please try again.');
@@ -2145,6 +2158,29 @@ export const StudentManagementPage: React.FC = () => {
         }
 
         try {
+          // Get and format Student ID
+          let studentId = row['STUDENT ID']?.toString().trim();
+          
+          // Validate Student ID format (00-0000)
+          // Handle cases where Excel might convert it to a number or remove the dash
+          if (studentId) {
+            // If it's a number without dash, try to format it
+            if (!studentId.includes('-')) {
+              // If it's 6 digits like "211234", format as "21-1234"
+              if (studentId.length === 6 && /^\d+$/.test(studentId)) {
+                studentId = `${studentId.substring(0, 2)}-${studentId.substring(2)}`;
+              }
+            }
+            
+            // Validate the final format
+            const studentIdRegex = /^\d{2}-\d{4}$/;
+            if (!studentIdRegex.test(studentId)) {
+              errors.push(`Row with Student ID "${row['STUDENT ID']}": Invalid format. Use 00-0000 format (e.g., 21-1234)`);
+              failCount++;
+              continue;
+            }
+          }
+
           // Format the name: "LAST NAME, FIRST NAME MIDDLE INITIAL"
           const middleInitial = row['MIDDLE INITIAL'] ? ` ${row['MIDDLE INITIAL']}.` : '';
           const fullName = `${row['LAST NAME']}, ${row['FIRST NAME']}${middleInitial}`;
@@ -2155,7 +2191,7 @@ export const StudentManagementPage: React.FC = () => {
           const section = row['SECTION']?.trim() || '';
 
           if (!program || !course || !section) {
-            errors.push(`Row with Student ID ${row['STUDENT ID']}: Missing PROGRAM, COURSE, or SECTION`);
+            errors.push(`Row with Student ID ${studentId}: Missing PROGRAM, COURSE, or SECTION`);
             failCount++;
             continue;
           }
@@ -2170,7 +2206,7 @@ export const StudentManagementPage: React.FC = () => {
           // Validate email format
           const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
           if (!emailRegex.test(studentData.email)) {
-            errors.push(`Row with Student ID ${row['STUDENT ID']}: Invalid email format`);
+            errors.push(`Row with Student ID ${studentId}: Invalid email format`);
             failCount++;
             continue;
           }
@@ -2180,7 +2216,7 @@ export const StudentManagementPage: React.FC = () => {
           if (result.success) {
             successCount++;
           } else {
-            errors.push(`${row['STUDENT ID']} - ${row['FIRST NAME']} ${row['LAST NAME']}: ${result.message}`);
+            errors.push(`${studentId} - ${row['FIRST NAME']} ${row['LAST NAME']}: ${result.message}`);
             failCount++;
           }
         } catch (err: any) {
@@ -2284,8 +2320,14 @@ export const StudentManagementPage: React.FC = () => {
             </div>
             <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
               <p className="text-xs text-blue-800">
-                <strong>💡 How to use:</strong> Download the template, fill in your student data (STUDENT ID, NAME, EMAIL, PROGRAM, COURSE, SECTION), save it, and then import it back. All students will be added automatically!
+                <strong>💡 How to use:</strong> Download the template, fill in your student data using the format below, save it, and then import it back. All students will be added automatically!
               </p>
+              <ul className="text-xs text-blue-700 mt-2 ml-4 list-disc space-y-1">
+                <li><strong>Student ID:</strong> Use format 00-0000 (e.g., 21-1234, 22-5678)</li>
+                <li><strong>Name:</strong> Last Name, First Name, and optional Middle Initial</li>
+                <li><strong>Email:</strong> Valid email address (required)</li>
+                <li><strong>Program/Course/Section:</strong> Must match your course settings</li>
+              </ul>
             </div>
           </div>
         </div>

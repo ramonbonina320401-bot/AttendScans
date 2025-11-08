@@ -2544,6 +2544,11 @@ export const SettingsPage: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [universityName, setUniversityName] = useState("University Name");
 
+  // Delete confirmation modal state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [courseToDelete, setCourseToDelete] = useState<CourseSection | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+
   // Admin account state
   const [adminEmail, setAdminEmail] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
@@ -2677,6 +2682,20 @@ export const SettingsPage: React.FC = () => {
   };
 
   const handleDeleteCourseSection = async (courseSection: CourseSection) => {
+    // Open confirmation modal instead of immediate delete
+    setCourseToDelete(courseSection);
+    setShowDeleteModal(true);
+    setDeleteConfirmText("");
+  };
+
+  const confirmDeleteCourseSection = async () => {
+    if (deleteConfirmText.toLowerCase() !== "delete") {
+      alert('Please type "delete" to confirm');
+      return;
+    }
+
+    if (!courseToDelete) return;
+
     try {
       const { db, auth } = await import("./firebase");
       const { doc, setDoc } = await import("firebase/firestore");
@@ -2686,8 +2705,9 @@ export const SettingsPage: React.FC = () => {
         const updatedCourseSections = courseSections.filter(
           (cs) =>
             !(
-              cs.course === courseSection.course &&
-              cs.section === courseSection.section
+              cs.program === courseToDelete.program &&
+              cs.course === courseToDelete.course &&
+              cs.section === courseToDelete.section
             )
         );
         await setDoc(doc(db, "instructorCourses", user.uid), {
@@ -2695,6 +2715,11 @@ export const SettingsPage: React.FC = () => {
           updatedAt: new Date().toISOString(),
         });
         setCourseSections(updatedCourseSections);
+        
+        // Close modal and reset state
+        setShowDeleteModal(false);
+        setCourseToDelete(null);
+        setDeleteConfirmText("");
       }
     } catch (error) {
       console.error("Error deleting course-section:", error);
@@ -2869,10 +2894,79 @@ export const SettingsPage: React.FC = () => {
   };
 
   return (
-    <Card className="max-w-2xl mx-auto">
-      <CardHeader>
-        <CardTitle>Settings</CardTitle>
-        <CardDescription>
+    <>
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && courseToDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+            <div className="text-center">
+              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+                <FiTrash2 className="h-6 w-6 text-red-600" />
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                Delete Course
+              </h3>
+              <div className="text-left mb-4 p-3 bg-gray-50 rounded-lg">
+                <p className="text-sm font-semibold text-gray-700 mb-2">You are about to delete:</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-blue-700 bg-blue-50 px-2 py-1 rounded">
+                    {courseToDelete.program}
+                  </span>
+                  <span className="text-xs text-gray-400">→</span>
+                  <span className="text-sm font-semibold text-gray-900">
+                    {courseToDelete.course}
+                  </span>
+                  <span className="text-xs text-gray-400">→</span>
+                  <span className="text-sm text-gray-700">
+                    Section {courseToDelete.section}
+                  </span>
+                </div>
+              </div>
+              <p className="text-sm text-gray-500 mb-4">
+                This action cannot be undone. All students enrolled in this course will need to be reassigned.
+              </p>
+              <div className="mb-6">
+                <Label htmlFor="delete-confirm" className="text-left block mb-2">
+                  Type <span className="font-mono font-bold text-red-600">delete</span> to confirm:
+                </Label>
+                <Input
+                  id="delete-confirm"
+                  type="text"
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  placeholder="Type 'delete' here"
+                  className="text-center font-mono"
+                  autoFocus
+                />
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setCourseToDelete(null);
+                    setDeleteConfirmText("");
+                  }}
+                  className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmDeleteCourseSection}
+                  disabled={deleteConfirmText.toLowerCase() !== "delete"}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Delete Course
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <Card className="max-w-2xl mx-auto">
+        <CardHeader>
+          <CardTitle>Settings</CardTitle>
+          <CardDescription>
           Manage system settings and preferences
         </CardDescription>
       </CardHeader>
@@ -3130,6 +3224,7 @@ export const SettingsPage: React.FC = () => {
         </CustomTabs>
       </CardContent>
     </Card>
+    </>
   );
 };
 

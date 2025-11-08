@@ -2081,11 +2081,111 @@ const StatusBadge: React.FC<{ status: AttendanceRecord["status"] }> = ({
  * 4. STUDENT MANAGEMENT PAGE
  */
 export const StudentManagementPage: React.FC = () => {
-  const { students, openAddModal, openEditModal, openDeleteModal } =
+  const { students, setStudents, openAddModal, openEditModal, openDeleteModal } =
     useDashboard();
   const [searchQuery, setSearchQuery] = useState("");
   const [isImporting, setIsImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Multi-select state
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(" ");
+  const [showBulkEditModal, setShowBulkEditModal] = useState(false);
+  const [bulkEditData, setBulkEditData] = useState({ program: "", course: "", section: "", email: "" });
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  // isAllSelected will be computed after filteredStudents is defined
+
+  const toggleSelectAll = () => {
+    if (isAllSelected) setSelectedIds([]);
+    else setSelectedIds(filteredStudents.map((s) => s.id));
+  };
+
+  const openBulkDelete = () => {
+    if (selectedIds.length === 0) return;
+    setBulkDeleteConfirm("");
+    setShowBulkDeleteModal(true);
+  };
+
+  const confirmBulkDelete = async () => {
+    if (bulkDeleteConfirm.toLowerCase() !== "delete") {
+      alert('Type "delete" to confirm deletion');
+      return;
+    }
+    try {
+      const { db } = await import("./firebase");
+      const { doc, deleteDoc } = await import("firebase/firestore");
+      await Promise.all(
+        selectedIds.map((id) => deleteDoc(doc(db, "registeredStudents", id)))
+      );
+      const { getRegisteredStudents } = await import(
+        "./services/adminService"
+      );
+      const refreshed = await getRegisteredStudents();
+      const mapped = refreshed.map((s) => ({
+        id: s.id,
+        name: s.name,
+        email: s.email,
+        program: s.program || "N/A",
+        course: s.course || "N/A",
+        section: s.section || "N/A",
+      }));
+      setStudents(mapped);
+      setSelectedIds([]);
+      setShowBulkDeleteModal(false);
+      setBulkDeleteConfirm("");
+    } catch (e) {
+      console.error(e);
+      alert("Failed to delete selected students.");
+    }
+  };
+
+  const openBulkEdit = () => {
+    if (selectedIds.length === 0) return;
+    setBulkEditData({ program: "", course: "", section: "", email: "" });
+    setShowBulkEditModal(true);
+  };
+
+  const saveBulkEdit = async () => {
+    try {
+      const { db } = await import("./firebase");
+      const { doc, updateDoc } = await import("firebase/firestore");
+      const tasks = selectedIds.map(async (id) => {
+        const payload: any = {};
+        if (bulkEditData.program.trim()) payload.program = bulkEditData.program.trim();
+        if (bulkEditData.course.trim()) payload.course = bulkEditData.course.trim();
+        if (bulkEditData.section.trim()) payload.section = bulkEditData.section.trim();
+        if (bulkEditData.email.trim()) payload.email = bulkEditData.email.trim().toLowerCase();
+        if (Object.keys(payload).length > 0) {
+          await updateDoc(doc(db, "registeredStudents", id), payload);
+        }
+      });
+      await Promise.all(tasks);
+      const { getRegisteredStudents } = await import(
+        "./services/adminService"
+      );
+      const refreshed = await getRegisteredStudents();
+      const mapped = refreshed.map((s) => ({
+        id: s.id,
+        name: s.name,
+        email: s.email,
+        program: s.program || "N/A",
+        course: s.course || "N/A",
+        section: s.section || "N/A",
+      }));
+      setStudents(mapped);
+      setSelectedIds([]);
+      setShowBulkEditModal(false);
+    } catch (e) {
+      console.error(e);
+      alert("Failed to update selected students.");
+    }
+  };
 
   const filteredStudents = useMemo(() => {
     return students.filter(
@@ -2095,6 +2195,13 @@ export const StudentManagementPage: React.FC = () => {
         student.id.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [students, searchQuery]);
+
+  const isAllSelected = useMemo(
+    () =>
+      filteredStudents.length > 0 &&
+      filteredStudents.every((s) => selectedIds.includes(s.id)),
+    [filteredStudents, selectedIds]
+  );
 
   const handleDownloadTemplate = async () => {
     try {
@@ -2317,6 +2424,7 @@ export const StudentManagementPage: React.FC = () => {
   };
 
   return (
+    <>
     <Card>
       <CardHeader>
         <CardTitle>Student Management</CardTitle>
@@ -2340,6 +2448,38 @@ export const StudentManagementPage: React.FC = () => {
               Add Student
             </Button>
           </div>
+
+          {/* Bulk Action Toolbar */}
+          {selectedIds.length > 0 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+              <div className="text-sm font-medium text-yellow-800">
+                {selectedIds.length} selected
+              </div>
+              <div className="flex gap-2 w-full sm:w-auto">
+                <Button
+                  variant="outline"
+                  className="flex-1 sm:flex-none"
+                  onClick={openBulkEdit}
+                >
+                  <FiEdit2 className="mr-2 h-4 w-4" /> Bulk Edit
+                </Button>
+                <Button
+                  variant="danger"
+                  className="flex-1 sm:flex-none"
+                  onClick={openBulkDelete}
+                >
+                  <FiTrash2 className="mr-2 h-4 w-4" /> Bulk Delete
+                </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1 sm:flex-none"
+                  onClick={() => setSelectedIds([])}
+                >
+                  Clear
+                </Button>
+              </div>
+            </div>
+          )}
 
           {/* Excel Import/Export Section */}
           <div className="border-t pt-4">
@@ -2397,6 +2537,15 @@ export const StudentManagementPage: React.FC = () => {
           <table className="w-full text-sm">
             <thead className="bg-gray-50">
               <tr>
+                <th className="px-4 py-3">
+                  <input
+                    type="checkbox"
+                    aria-label="Select All"
+                    checked={isAllSelected}
+                    onChange={toggleSelectAll}
+                    className="h-4 w-4 rounded border-gray-300 text-gray-600 focus:ring-gray-500"
+                  />
+                </th>
                 <th className="px-4 py-3 text-left font-medium text-gray-600">
                   STUDENT ID
                 </th>
@@ -2418,6 +2567,14 @@ export const StudentManagementPage: React.FC = () => {
               {filteredStudents.length > 0 ? (
                 filteredStudents.map((student) => (
                   <tr key={student.id}>
+                    <td className="px-4 py-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(student.id)}
+                        onChange={() => toggleSelect(student.id)}
+                        className="h-4 w-4 rounded border-gray-300 text-gray-600 focus:ring-gray-500"
+                      />
+                    </td>
                     <td className="px-4 py-3 font-medium">{student.id}</td>
                     <td className="px-4 py-3">{student.name}</td>
                     <td className="px-4 py-3">{student.email}</td>
@@ -2476,6 +2633,17 @@ export const StudentManagementPage: React.FC = () => {
                   <div>
                     <p className="font-bold text-gray-800">{student.name}</p>
                     <p className="text-xs text-gray-500">{student.id}</p>
+                    <div className="mt-2">
+                      <label className="inline-flex items-center gap-2 text-xs text-gray-600">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.includes(student.id)}
+                          onChange={() => toggleSelect(student.id)}
+                          className="h-4 w-4 rounded border-gray-300 text-gray-600 focus:ring-gray-500"
+                        />
+                        Select
+                      </label>
+                    </div>
                   </div>
                   <CustomDropdown>
                     <DropdownTrigger>
@@ -2519,7 +2687,134 @@ export const StudentManagementPage: React.FC = () => {
           )}
         </div>
       </CardContent>
-    </Card>
+  </Card>
+
+    {/* Bulk Delete Modal */}
+    {showBulkDeleteModal && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+          <div className="text-center">
+            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+              <FiTrash2 className="h-6 w-6 text-red-600" />
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              Delete Selected Students
+            </h3>
+            <p className="text-sm text-gray-500 mb-4">
+              You are about to delete {selectedIds.length} student(s). This action cannot be undone.
+            </p>
+            <Label className="text-sm text-left block mb-2">
+              Type <span className="font-mono font-bold text-red-600">delete</span> to confirm:
+            </Label>
+            <Input
+              value={bulkDeleteConfirm}
+              onChange={(e) => setBulkDeleteConfirm(e.target.value)}
+              placeholder="delete"
+              className="text-center font-mono mb-4"
+              autoFocus
+            />
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => {
+                  setShowBulkDeleteModal(false);
+                  setBulkDeleteConfirm("");
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                className="flex-1"
+                disabled={bulkDeleteConfirm.toLowerCase() !== "delete"}
+                onClick={confirmBulkDelete}
+              >
+                Delete
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Bulk Edit Modal */}
+    {showBulkEditModal && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+          <div className="text-center">
+            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 mb-4">
+              <FiEdit2 className="h-6 w-6 text-blue-600" />
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              Bulk Edit Students
+            </h3>
+            <p className="text-sm text-gray-500 mb-4">
+              Leave a field blank to keep existing values for each student.
+            </p>
+            <div className="space-y-3 text-left">
+              <div>
+                <Label className="text-xs">Program</Label>
+                <Input
+                  value={bulkEditData.program}
+                  onChange={(e) =>
+                    setBulkEditData((d) => ({ ...d, program: e.target.value }))
+                  }
+                  placeholder="e.g., BSIT"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Course Code</Label>
+                <Input
+                  value={bulkEditData.course}
+                  onChange={(e) =>
+                    setBulkEditData((d) => ({ ...d, course: e.target.value }))
+                  }
+                  placeholder="e.g., IM101"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Section</Label>
+                <Input
+                  value={bulkEditData.section}
+                  onChange={(e) =>
+                    setBulkEditData((d) => ({ ...d, section: e.target.value }))
+                  }
+                  placeholder="e.g., 1-4"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Email</Label>
+                <Input
+                  type="email"
+                  value={bulkEditData.email}
+                  onChange={(e) =>
+                    setBulkEditData((d) => ({ ...d, email: e.target.value }))
+                  }
+                  placeholder="new-email@example.com"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => {
+                  setShowBulkEditModal(false);
+                  setBulkEditData({ program: "", course: "", section: "", email: "" });
+                }}
+              >
+                Cancel
+              </Button>
+              <Button className="flex-1" onClick={saveBulkEdit}>
+                Save Changes
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 };
 

@@ -1193,7 +1193,7 @@ export const GenerateQrPage: React.FC = () => {
   const [selectedCourseSection, setSelectedCourseSection] =
     useState<string>("");
   const [className, setClassName] = useState<string>("");
-  const [duration, setDuration] = useState<number>(60); // Default 1 hour in minutes
+  const [duration, setDuration] = useState<number>(120); // Default 2 hours (in minutes)
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDeployed, setIsDeployed] = useState(false);
   const [deployedAt, setDeployedAt] = useState<Date | null>(null);
@@ -1241,7 +1241,7 @@ export const GenerateQrPage: React.FC = () => {
       return;
     }
     if (!className.trim()) {
-      alert("Please enter a class name");
+      alert("Please enter a topic");
       return;
     }
 
@@ -1257,7 +1257,7 @@ export const GenerateQrPage: React.FC = () => {
       const course = match ? match[1].trim() : selectedCourseSection;
       const section = match ? match[2].trim() : "A";
 
-      // Combine course-section and class name for the full class identifier
+  // Combine course-section and topic for the full class identifier
       const fullClassName = `${selectedCourseSection} - ${className}`;
 
       // Generate QR code data with course and section
@@ -1295,7 +1295,7 @@ export const GenerateQrPage: React.FC = () => {
       return;
     }
     if (!className.trim()) {
-      alert("Please enter a class name");
+      alert("Please enter a topic");
       return;
     }
 
@@ -1320,7 +1320,7 @@ export const GenerateQrPage: React.FC = () => {
       const course = match ? match[1].trim() : selectedCourseSection;
       const section = match ? match[2].trim() : "A";
 
-      // Combine course-section and class name
+  // Combine course-section and topic
       const fullClassName = `${selectedCourseSection} - ${className}`;
       const qrData = await generateQRCodeData(
         fullClassName,
@@ -1579,7 +1579,7 @@ export const GenerateQrPage: React.FC = () => {
     <Card className="max-w-2xl mx-auto">
       <CardHeader className="text-center">
         <FaQrcode className="mx-auto h-12 w-12 text-gray-700" />
-        <CardTitle className="text-2xl pt-2">Attendance QR Code</CardTitle>
+  <CardTitle className="text-2xl pt-2">Attendance QR Code</CardTitle>
         <CardDescription>
           Configure and deploy your attendance QR code
         </CardDescription>
@@ -1600,7 +1600,7 @@ export const GenerateQrPage: React.FC = () => {
           <div className="p-4 bg-gray-100 border border-dashed border-gray-300 rounded-lg w-[300px] h-[300px] flex flex-col items-center justify-center">
             <FaQrcode className="h-20 w-20 text-gray-300 mb-3" />
             <p className="text-gray-500 text-sm font-medium">
-              Select course and class name
+              Select course and topic
             </p>
             <p className="text-gray-400 text-xs">
               Then click Generate or Deploy
@@ -1611,7 +1611,7 @@ export const GenerateQrPage: React.FC = () => {
         {/* Configuration Inputs */}
         <div className="w-full space-y-4 border-t pt-4">
           <div className="space-y-2">
-            <Label htmlFor="course-input">Course & Section</Label>
+            <Label htmlFor="course-input">Program • Course • Section</Label>
             {isLoadingCourses ? (
               <Input value="Loading..." disabled className="w-full" />
             ) : courseSections.length > 0 ? (
@@ -1623,10 +1623,11 @@ export const GenerateQrPage: React.FC = () => {
                 required
               >
                 {courseSections.map((cs) => {
-                  const displayValue = `${cs.course} - Section ${cs.section}`;
+                  const value = `${cs.course} - Section ${cs.section}`;
+                  const label = `${cs.program || 'N/A'} → ${cs.course} → Section ${cs.section}`;
                   return (
-                    <option key={displayValue} value={displayValue}>
-                      {displayValue}
+                    <option key={value} value={value}>
+                      {label}
                     </option>
                   );
                 })}
@@ -1641,13 +1642,13 @@ export const GenerateQrPage: React.FC = () => {
             )}
           </div>
           <div className="space-y-2">
-            <Label htmlFor="class-input">Class Name</Label>
+            <Label htmlFor="class-input">Topic</Label>
             <Input
               id="class-input"
               value={className}
               onChange={(e) => setClassName(e.target.value)}
               className="w-full"
-              placeholder="e.g., Lecture 1, Midterm Review"
+              placeholder="e.g., Arrays & Pointers, Midterm Review"
             />
           </div>
           <div className="space-y-2">
@@ -1659,14 +1660,9 @@ export const GenerateQrPage: React.FC = () => {
               onChange={(e) => setDuration(Number(e.target.value))}
               className="w-full"
             >
-              <option value="15">15 minutes</option>
-              <option value="30">30 minutes</option>
-              <option value="60">1 hour</option>
               <option value="120">2 hours</option>
               <option value="180">3 hours</option>
-              <option value="360">6 hours</option>
-              <option value="720">12 hours</option>
-              <option value="1440">24 hours</option>
+              <option value="300">5 hours</option>
             </CustomSelect>
           </div>
         </div>

@@ -1201,8 +1201,9 @@ export const GenerateQrPage: React.FC = () => {
   const [endVerificationCode, setEndVerificationCode] = useState("");
   const [courseSections, setCourseSections] = useState<CourseSection[]>([]);
   const [isLoadingCourses, setIsLoadingCourses] = useState(true);
+  const [lateThreshold, setLateThreshold] = useState<number>(15); // Grace period in minutes
 
-  // Fetch instructor's courses on mount
+  // Fetch instructor's courses and settings (late threshold) on mount
   useEffect(() => {
     const fetchCourses = async () => {
       try {
@@ -1222,6 +1223,14 @@ export const GenerateQrPage: React.FC = () => {
               setSelectedCourseSection(
                 `${fetchedCourseSections[0].course} - Section ${fetchedCourseSections[0].section}`
               );
+            }
+          }
+          // Fetch settings for late threshold (grace period)
+          const settingsDoc = await getDoc(doc(db, "settings", user.uid));
+          if (settingsDoc.exists()) {
+            const settingsData = settingsDoc.data();
+            if (typeof settingsData.lateThreshold === 'number') {
+              setLateThreshold(settingsData.lateThreshold);
             }
           }
         }
@@ -1496,6 +1505,12 @@ export const GenerateQrPage: React.FC = () => {
                         </p>
                       </div>
                       <div>
+                        <p className="text-xs text-gray-500 mb-1">Grace Period</p>
+                        <p className="font-semibold text-gray-900">
+                          {lateThreshold} min
+                        </p>
+                      </div>
+                      <div>
                         <p className="text-xs text-gray-500 mb-1">Date</p>
                         <p className="font-semibold text-gray-900">
                           {sessionData?.date}
@@ -1664,6 +1679,15 @@ export const GenerateQrPage: React.FC = () => {
               <option value="180">3 hours</option>
               <option value="300">5 hours</option>
             </CustomSelect>
+          </div>
+          <div className="space-y-1">
+            <Label>Grace Period (Late Threshold)</Label>
+            <Input
+              value={`${lateThreshold} minutes`}
+              disabled
+              className="w-full bg-gray-50 text-gray-700"
+            />
+            <p className="text-xs text-gray-500">Students scanning after {lateThreshold} minutes are marked late.</p>
           </div>
         </div>
 

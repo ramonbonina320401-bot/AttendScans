@@ -2237,9 +2237,14 @@ export const StudentManagementPage: React.FC = () => {
         }
       }
 
+      // Add reload notification if any students were imported
+      if (successCount > 0) {
+        message += '\n\n🔄 The page will refresh automatically to show the newly imported students.';
+      }
+
       alert(message);
 
-      // Reload students list
+      // Reload students list to show new students
       if (successCount > 0) {
         window.location.reload();
       }
@@ -2328,6 +2333,9 @@ export const StudentManagementPage: React.FC = () => {
                 <li><strong>Email:</strong> Valid email address (required)</li>
                 <li><strong>Program/Course/Section:</strong> Must match your course settings</li>
               </ul>
+              <p className="text-xs text-blue-700 mt-2">
+                <strong>ℹ️ Note:</strong> After importing, the page will automatically refresh to display your newly added students.
+              </p>
             </div>
           </div>
         </div>
@@ -3143,6 +3151,7 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
               s.id === student.id ? { ...student, ...formData } : s
             )
           );
+          alert('✅ Student updated successfully!');
           onClose();
         } else {
           alert(result.message);
@@ -3159,7 +3168,10 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
             ...formData,
           };
           setStudents((prev) => [...prev, newStudent]);
+          alert('✅ Student added successfully!\n\n🔄 The page will refresh to display the new student.');
           onClose();
+          // Reload to show new student
+          window.location.reload();
         } else {
           alert(result.message);
         }

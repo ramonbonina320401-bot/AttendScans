@@ -94,6 +94,7 @@ export const getInstructorAttendanceRecords = async (): Promise<AdminAttendanceR
           scannedAt: data.scannedAt,
           date: data.date,
           status: data.status,
+          program: data.program || 'N/A',
           course: data.course || 'N/A',
           section: data.section || 'N/A'
         });
@@ -308,6 +309,7 @@ export const getStudentAttendanceRecords = async (studentId: string): Promise<Ad
         scannedAt: data.scannedAt,
         date: data.date,
         status: data.status,
+        program: data.program || 'N/A',
         course: data.course || 'N/A',
         section: data.section || 'N/A'
       });

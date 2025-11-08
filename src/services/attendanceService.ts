@@ -23,8 +23,9 @@ export interface AttendanceRecord {
   scannedAt: string; // ISO timestamp of when the scan happened
   date: string;
   status: 'present' | 'late';
-  course: string; // Course name (e.g., "CS101")
-  section: string; // Section identifier (e.g., "A", "B")
+  program: string; // Program (e.g., "BSIT", "BSCS")
+  course: string; // Course code (e.g., "IM101")
+  section: string; // Section identifier (e.g., "1-4")
   timestamp?: number; // Unix timestamp for sorting
 }
 
@@ -132,11 +133,13 @@ export const markAttendance = async (qrData: QRCodeData): Promise<{ success: boo
 
     // Verify student's course and section match the QR code's course and section
     let isEnrolledInThisSection = false;
+    let studentProgram = '';
     let studentCourse = '';
     let studentSection = '';
     
     registeredStudentsSnapshot.forEach((doc) => {
       const studentData = doc.data();
+      studentProgram = studentData.program || '';
       studentCourse = studentData.course;
       studentSection = studentData.section;
       
@@ -192,6 +195,7 @@ export const markAttendance = async (qrData: QRCodeData): Promise<{ success: boo
       scannedAt: now.toISOString(),
       date: qrData.date,
       status: attendanceStatus,
+      program: studentProgram,
       course: qrData.course,
       section: qrData.section,
       timestamp: now.getTime() // Unix timestamp for easy sorting

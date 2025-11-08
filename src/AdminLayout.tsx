@@ -58,7 +58,8 @@ export interface AttendanceRecord {
   date: string; // YYYY-MM-DD
   time: string; // HH:MM AM/PM
   status: "PRESENT" | "LATE" | "ABSENT";
-  course: string; // Course name
+  program: string; // Program (e.g., BSIT, BSCS)
+  course: string; // Course code (e.g., IM101)
   section: string; // Section identifier
   className?: string; // Optional class name for display
 }
@@ -1002,6 +1003,7 @@ export const DashboardPage: React.FC = () => {
         date: r.date,
         time: new Date(r.scannedAt).toLocaleTimeString(),
         status: r.status.toUpperCase() as "PRESENT" | "LATE" | "ABSENT",
+        program: r.program || "N/A",
         course: r.course || "N/A",
         section: r.section || "N/A",
         className: r.className,
@@ -1689,38 +1691,63 @@ export const AttendanceRecordsPage: React.FC = () => {
   const { records, setRecords } = useDashboard();
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Get current year's January 1st
-  const currentYear = new Date().getFullYear();
-  const [dateFrom, setDateFrom] = useState(`${currentYear}-01-01`);
-
   // Get today's date in YYYY-MM-DD format
   const today = new Date().toISOString().split("T")[0];
-  const [dateTo, setDateTo] = useState(today);
+  const [selectedDate, setSelectedDate] = useState(today);
 
   // Filter states
+  const [selectedProgram, setSelectedProgram] = useState("All Programs");
   const [selectedCourse, setSelectedCourse] = useState("All Courses");
   const [selectedSection, setSelectedSection] = useState("All Sections");
+
+  // Instructor's course sections from Settings
+  const [courseSections, setCourseSections] = useState<CourseSection[]>([]);
 
   // Sorting state
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
-  // Get unique courses and sections from records
-  const uniqueCourseSections = useMemo(() => {
+  // Fetch instructor's course sections on mount
+  useEffect(() => {
+    const fetchCourseSections = async () => {
+      try {
+        const { db, auth } = await import("./firebase");
+        const { doc, getDoc } = await import("firebase/firestore");
+        const user = auth.currentUser;
+
+        if (user) {
+          const courseDoc = await getDoc(
+            doc(db, "instructorCourses", user.uid)
+          );
+          if (courseDoc.exists()) {
+            setCourseSections(courseDoc.data().courseSections || []);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching course sections:", error);
+      }
+    };
+
+    fetchCourseSections();
+  }, []);
+
+  // Get unique programs, courses, and sections from instructor's courseSections
+  const uniqueOptions = useMemo(() => {
+    const programsSet = new Set<string>();
     const coursesSet = new Set<string>();
     const sectionsSet = new Set<string>();
 
-    records.forEach((record) => {
-      if (record.course && record.course !== "N/A")
-        coursesSet.add(record.course);
-      if (record.section && record.section !== "N/A")
-        sectionsSet.add(record.section);
+    courseSections.forEach((cs) => {
+      if (cs.program) programsSet.add(cs.program);
+      if (cs.course) coursesSet.add(cs.course);
+      if (cs.section) sectionsSet.add(cs.section);
     });
 
     return {
+      programs: ["All Programs", ...Array.from(programsSet).sort()],
       courses: ["All Courses", ...Array.from(coursesSet).sort()],
       sections: ["All Sections", ...Array.from(sectionsSet).sort()],
     };
-  }, [records]);
+  }, [courseSections]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -1737,6 +1764,7 @@ export const AttendanceRecordsPage: React.FC = () => {
         date: r.date,
         time: new Date(r.scannedAt).toLocaleTimeString(),
         status: r.status.toUpperCase() as "PRESENT" | "LATE" | "ABSENT",
+        program: r.program || "N/A",
         course: r.course || "N/A",
         section: r.section || "N/A",
         className: r.className,
@@ -1752,8 +1780,8 @@ export const AttendanceRecordsPage: React.FC = () => {
   };
 
   const handleReset = () => {
-    setDateFrom(`${currentYear}-01-01`);
-    setDateTo(today);
+    setSelectedDate(today);
+    setSelectedProgram("All Programs");
     setSelectedCourse("All Courses");
     setSelectedSection("All Sections");
   };
@@ -1764,11 +1792,13 @@ export const AttendanceRecordsPage: React.FC = () => {
 
   const filteredRecords = useMemo(() => {
     let filtered = records.filter((record) => {
-      // Date filtering
-      const recordDate = new Date(record.date);
-      const fromDate = new Date(dateFrom);
-      const toDate = new Date(dateTo);
-      const withinDateRange = recordDate >= fromDate && recordDate <= toDate;
+      // Date filtering - exact match for selected date
+      const recordDate = record.date; // Already in YYYY-MM-DD format
+      const dateMatch = recordDate === selectedDate;
+
+      // Program filtering
+      const programMatch =
+        selectedProgram === "All Programs" || record.program === selectedProgram;
 
       // Course filtering
       const courseMatch =
@@ -1779,7 +1809,7 @@ export const AttendanceRecordsPage: React.FC = () => {
         selectedSection === "All Sections" ||
         record.section === selectedSection;
 
-      return withinDateRange && courseMatch && sectionMatch;
+      return dateMatch && programMatch && courseMatch && sectionMatch;
     });
 
     // Sort by name
@@ -1794,7 +1824,7 @@ export const AttendanceRecordsPage: React.FC = () => {
     });
 
     return filtered;
-  }, [records, dateFrom, dateTo, selectedCourse, selectedSection, sortOrder]);
+  }, [records, selectedDate, selectedProgram, selectedCourse, selectedSection, sortOrder]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -1820,20 +1850,36 @@ export const AttendanceRecordsPage: React.FC = () => {
           </Button>
         </CardHeader>
         <CardContent>
+          {/* Program Display at Top */}
+          {selectedProgram !== "All Programs" && (
+            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-blue-700">Program:</span>
+                <span className="text-lg font-bold text-blue-900">{selectedProgram}</span>
+              </div>
+            </div>
+          )}
+
           <form className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
             <div>
-              <Label>Date From</Label>
+              <Label>Select Date</Label>
               <CustomDatePicker
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
               />
             </div>
             <div>
-              <Label>Date To</Label>
-              <CustomDatePicker
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-              />
+              <Label>Program</Label>
+              <CustomSelect
+                value={selectedProgram}
+                onChange={(e) => setSelectedProgram(e.target.value)}
+              >
+                {uniqueOptions.programs.map((program) => (
+                  <option key={program} value={program}>
+                    {program}
+                  </option>
+                ))}
+              </CustomSelect>
             </div>
             <div>
               <Label>Course</Label>
@@ -1841,7 +1887,7 @@ export const AttendanceRecordsPage: React.FC = () => {
                 value={selectedCourse}
                 onChange={(e) => setSelectedCourse(e.target.value)}
               >
-                {uniqueCourseSections.courses.map((course) => (
+                {uniqueOptions.courses.map((course) => (
                   <option key={course} value={course}>
                     {course}
                   </option>
@@ -1854,7 +1900,7 @@ export const AttendanceRecordsPage: React.FC = () => {
                 value={selectedSection}
                 onChange={(e) => setSelectedSection(e.target.value)}
               >
-                {uniqueCourseSections.sections.map((section) => (
+                {uniqueOptions.sections.map((section) => (
                   <option key={section} value={section}>
                     {section}
                   </option>
@@ -1864,18 +1910,12 @@ export const AttendanceRecordsPage: React.FC = () => {
             <div className="flex flex-col sm:flex-row gap-4 sm:col-span-2 lg:col-span-4">
               <Button
                 type="button"
-                className="flex-1"
-                onClick={(e) => e.preventDefault()}
-              >
-                Apply Filters
-              </Button>
-              <Button
-                type="button"
                 variant="outline"
                 className="flex-1"
                 onClick={handleReset}
               >
-                Reset
+                <FiRefreshCw className="mr-2 h-4 w-4" />
+                Reset Filters
               </Button>
             </div>
           </form>
@@ -1912,7 +1952,7 @@ export const AttendanceRecordsPage: React.FC = () => {
                     NAME
                   </th>
                   <th className="px-4 py-3 text-left font-medium text-gray-600">
-                    COURSE & SECTION
+                    PROGRAM - COURSE - SECTION
                   </th>
                   <th className="px-4 py-3 text-left font-medium text-gray-600">
                     DATE
@@ -1934,8 +1974,12 @@ export const AttendanceRecordsPage: React.FC = () => {
                       </td>
                       <td className="px-4 py-3">{record.name}</td>
                       <td className="px-4 py-3">
-                        <span className="inline-flex items-center">
-                          {record.course} - Section {record.section}
+                        <span className="inline-flex items-center gap-2">
+                          <span className="font-semibold text-blue-700">{record.program}</span>
+                          <span className="text-gray-400">→</span>
+                          <span className="font-medium">{record.course}</span>
+                          <span className="text-gray-400">→</span>
+                          <span className="text-gray-600">Section {record.section}</span>
                         </span>
                       </td>
                       <td className="px-4 py-3">{record.date}</td>
@@ -1973,6 +2017,12 @@ export const AttendanceRecordsPage: React.FC = () => {
                     <StatusBadge status={record.status} />
                   </div>
                   <div className="mt-4 border-t pt-4 space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Program:</span>
+                      <span className="font-semibold text-blue-700">
+                        {record.program}
+                      </span>
+                    </div>
                     <div className="flex justify-between">
                       <span className="text-gray-500">Course:</span>
                       <span className="font-medium text-gray-800">
@@ -3459,6 +3509,7 @@ export const AdminLayout: React.FC = () => {
               date: r.date,
               time: new Date(r.scannedAt).toLocaleTimeString(),
               status: r.status.toUpperCase() as "PRESENT" | "LATE" | "ABSENT",
+              program: r.program || "N/A",
               course: r.course || "N/A",
               section: r.section || "N/A",
               className: r.className,
@@ -3547,6 +3598,7 @@ export const AdminLayout: React.FC = () => {
         date: r.date,
         time: new Date(r.scannedAt).toLocaleTimeString(),
         status: r.status.toUpperCase() as "PRESENT" | "LATE" | "ABSENT",
+        program: r.program || "N/A",
         course: r.course || "N/A",
         section: r.section || "N/A",
         className: r.className,

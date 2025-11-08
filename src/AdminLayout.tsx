@@ -33,6 +33,7 @@ import {
   FiTrash2,
   FiMoreVertical,
   FiDownload,
+  FiUpload,
   FiRefreshCw,
   FiAlertTriangle,
   FiArrowUp,
@@ -2032,6 +2033,8 @@ export const StudentManagementPage: React.FC = () => {
   const { students, openAddModal, openEditModal, openDeleteModal } =
     useDashboard();
   const [searchQuery, setSearchQuery] = useState("");
+  const [isImporting, setIsImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const filteredStudents = useMemo(() => {
     return students.filter(
@@ -2042,6 +2045,184 @@ export const StudentManagementPage: React.FC = () => {
     );
   }, [students, searchQuery]);
 
+  const handleDownloadTemplate = async () => {
+    try {
+      // Dynamically import xlsx
+      const XLSX = await import('xlsx');
+      
+      // Create template data with headers and example rows
+      const templateData = [
+        {
+          'STUDENT ID': '2021-00001',
+          'LAST NAME': 'Doe',
+          'FIRST NAME': 'John',
+          'MIDDLE INITIAL': 'A',
+          'EMAIL': 'john.doe@example.com',
+          'PROGRAM': 'BSIT',
+          'COURSE': 'IM101',
+          'SECTION': '1-4'
+        },
+        {
+          'STUDENT ID': '2021-00002',
+          'LAST NAME': 'Smith',
+          'FIRST NAME': 'Jane',
+          'MIDDLE INITIAL': 'B',
+          'EMAIL': 'jane.smith@example.com',
+          'PROGRAM': 'BSCS',
+          'COURSE': 'CS201',
+          'SECTION': 'A'
+        },
+        {
+          'STUDENT ID': '',
+          'LAST NAME': '',
+          'FIRST NAME': '',
+          'MIDDLE INITIAL': '',
+          'EMAIL': '',
+          'PROGRAM': '',
+          'COURSE': '',
+          'SECTION': ''
+        }
+      ];
+
+      // Create workbook and worksheet
+      const worksheet = XLSX.utils.json_to_sheet(templateData);
+      
+      // Set column widths
+      worksheet['!cols'] = [
+        { wch: 15 },  // STUDENT ID
+        { wch: 20 },  // LAST NAME
+        { wch: 20 },  // FIRST NAME
+        { wch: 15 },  // MIDDLE INITIAL
+        { wch: 30 },  // EMAIL
+        { wch: 12 },  // PROGRAM
+        { wch: 12 },  // COURSE
+        { wch: 10 }   // SECTION
+      ];
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Students');
+
+      // Generate Excel file and trigger download
+      XLSX.writeFile(workbook, 'Student_Import_Template.xlsx');
+    } catch (error) {
+      console.error('Error creating template:', error);
+      alert('Failed to download template. Please try again.');
+    }
+  };
+
+  const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsImporting(true);
+
+    try {
+      // Dynamically import xlsx
+      const XLSX = await import('xlsx');
+      
+      // Read the file
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet) as any[];
+
+      if (jsonData.length === 0) {
+        alert('The Excel file is empty. Please add student data and try again.');
+        setIsImporting(false);
+        return;
+      }
+
+      // Validate and process the imported data
+      const { addStudentToClass } = await import('./services/adminService');
+      let successCount = 0;
+      let failCount = 0;
+      const errors: string[] = [];
+
+      for (const row of jsonData) {
+        // Skip empty rows or example rows
+        if (!row['STUDENT ID'] || !row['EMAIL'] || !row['FIRST NAME'] || !row['LAST NAME']) {
+          continue;
+        }
+
+        try {
+          // Format the name: "LAST NAME, FIRST NAME MIDDLE INITIAL"
+          const middleInitial = row['MIDDLE INITIAL'] ? ` ${row['MIDDLE INITIAL']}.` : '';
+          const fullName = `${row['LAST NAME']}, ${row['FIRST NAME']}${middleInitial}`;
+
+          // Format course: "PROGRAM - COURSE - Section SECTION"
+          const program = row['PROGRAM']?.trim() || '';
+          const course = row['COURSE']?.trim() || '';
+          const section = row['SECTION']?.trim() || '';
+
+          if (!program || !course || !section) {
+            errors.push(`Row with Student ID ${row['STUDENT ID']}: Missing PROGRAM, COURSE, or SECTION`);
+            failCount++;
+            continue;
+          }
+
+          const studentData = {
+            name: fullName.trim(),
+            email: row['EMAIL']?.toString().trim().toLowerCase() || '',
+            course: course,
+            section: section,
+          };
+
+          // Validate email format
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          if (!emailRegex.test(studentData.email)) {
+            errors.push(`Row with Student ID ${row['STUDENT ID']}: Invalid email format`);
+            failCount++;
+            continue;
+          }
+
+          const result = await addStudentToClass(studentData);
+          
+          if (result.success) {
+            successCount++;
+          } else {
+            errors.push(`${row['STUDENT ID']} - ${row['FIRST NAME']} ${row['LAST NAME']}: ${result.message}`);
+            failCount++;
+          }
+        } catch (err: any) {
+          errors.push(`${row['STUDENT ID']}: ${err.message}`);
+          failCount++;
+        }
+      }
+
+      // Show results
+      let message = `Import completed!\n✅ Successfully imported: ${successCount} students`;
+      if (failCount > 0) {
+        message += `\n❌ Failed: ${failCount} students`;
+        if (errors.length > 0 && errors.length <= 5) {
+          message += '\n\nErrors:\n' + errors.join('\n');
+        } else if (errors.length > 5) {
+          message += '\n\nShowing first 5 errors:\n' + errors.slice(0, 5).join('\n');
+          message += `\n... and ${errors.length - 5} more errors`;
+        }
+      }
+
+      alert(message);
+
+      // Reload students list
+      if (successCount > 0) {
+        window.location.reload();
+      }
+    } catch (error: any) {
+      console.error('Error importing Excel:', error);
+      alert(`Failed to import Excel file: ${error.message}`);
+    } finally {
+      setIsImporting(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const triggerFileInput = () => {
+    fileInputRef.current?.click();
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -2049,21 +2230,64 @@ export const StudentManagementPage: React.FC = () => {
         <CardDescription>Add, edit, or remove student records</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-4">
-          <div className="relative w-full sm:w-72">
-            <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />{" "}
-            {/* ICON RESTORED */}
-            <Input
-              placeholder="Search students..."
-              className="pl-10"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+        <div className="flex flex-col gap-4 mb-6">
+          {/* Search and Add Button Row */}
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div className="relative w-full sm:w-72">
+              <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <Input
+                placeholder="Search students..."
+                className="pl-10"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            <Button className="w-full sm:w-auto" onClick={openAddModal}>
+              <FiPlus className="mr-2 h-4 w-4" />
+              Add Student
+            </Button>
           </div>
-          <Button className="w-full sm:w-auto" onClick={openAddModal}>
-            <FiPlus className="mr-2 h-4 w-4" /> {/* ICON RESTORED */}
-            Add Student
-          </Button>
+
+          {/* Excel Import/Export Section */}
+          <div className="border-t pt-4">
+            <h3 className="text-sm font-semibold text-gray-900 mb-3">
+              📊 Bulk Import via Excel
+            </h3>
+            <p className="text-xs text-gray-500 mb-3">
+              Save time by importing multiple students at once using our Excel template
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={handleDownloadTemplate}
+              >
+                <FiDownload className="mr-2 h-4 w-4" />
+                Download Excel Template
+              </Button>
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={triggerFileInput}
+                disabled={isImporting}
+              >
+                <FiUpload className="mr-2 h-4 w-4" />
+                {isImporting ? 'Importing...' : 'Import Excel File'}
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={handleImportExcel}
+                style={{ display: 'none' }}
+              />
+            </div>
+            <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+              <p className="text-xs text-blue-800">
+                <strong>💡 How to use:</strong> Download the template, fill in your student data (STUDENT ID, NAME, EMAIL, PROGRAM, COURSE, SECTION), save it, and then import it back. All students will be added automatically!
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Desktop Table View */}

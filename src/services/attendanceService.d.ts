@@ -18,7 +18,7 @@ export interface AttendanceRecord {
     instructorId: string;
     scannedAt: string;
     date: string;
-    status: 'present';
+    status: 'present' | 'late';
     course: string;
     section: string;
     timestamp?: number;

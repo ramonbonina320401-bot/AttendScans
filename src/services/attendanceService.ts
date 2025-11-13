@@ -117,9 +117,9 @@ export const markAttendance = async (qrData: QRCodeData): Promise<{ success: boo
     }
 
     // Check if this student's email is registered under the instructor
+    // Query only by email (students can only read their own records)
     const registeredStudentsQuery = query(
       collection(db, 'registeredStudents'),
-      where('instructorId', '==', qrData.instructorId),
       where('email', '==', studentEmail)
     );
     const registeredStudentsSnapshot = await getDocs(registeredStudentsQuery);
@@ -131,7 +131,8 @@ export const markAttendance = async (qrData: QRCodeData): Promise<{ success: boo
       };
     }
 
-    // Verify student's course and section match the QR code's course and section
+    // Verify the student is registered under THIS instructor
+    let registeredWithThisInstructor = false;
     let isEnrolledInThisSection = false;
     let studentProgram = '';
     let studentCourse = '';
@@ -139,15 +140,27 @@ export const markAttendance = async (qrData: QRCodeData): Promise<{ success: boo
     
     registeredStudentsSnapshot.forEach((doc) => {
       const studentData = doc.data();
-      studentProgram = studentData.program || '';
-      studentCourse = studentData.course;
-      studentSection = studentData.section;
       
-      // Check if course and section match
-      if (studentData.course === qrData.course && studentData.section === qrData.section) {
-        isEnrolledInThisSection = true;
+      // Check if this record is for the current instructor
+      if (studentData.instructorId === qrData.instructorId) {
+        registeredWithThisInstructor = true;
+        studentProgram = studentData.program || '';
+        studentCourse = studentData.course;
+        studentSection = studentData.section;
+        
+        // Check if course and section match
+        if (studentData.course === qrData.course && studentData.section === qrData.section) {
+          isEnrolledInThisSection = true;
+        }
       }
     });
+
+    if (!registeredWithThisInstructor) {
+      return {
+        success: false,
+        message: "You are not registered with this instructor. Please contact your instructor to add you to their class."
+      };
+    }
 
     if (!isEnrolledInThisSection) {
       return {

@@ -224,11 +224,20 @@ export const markAttendance = async (qrData: QRCodeData): Promise<{ success: boo
 
     // Fetch instructor's late threshold setting
     console.log('[ATTENDANCE] Step 18: Fetching instructor settings');
-    const instructorSettingsDoc = await getDoc(doc(db, 'settings', qrData.instructorId));
-    console.log('[ATTENDANCE] Step 19: Settings fetched, exists:', instructorSettingsDoc.exists());
-    const lateThreshold = instructorSettingsDoc.exists() 
-      ? instructorSettingsDoc.data().lateThreshold || 15 
-      : 15; // Default to 15 minutes if not set
+    let lateThreshold = 15; // default
+    try {
+      const instructorSettingsDoc = await getDoc(doc(db, 'settings', qrData.instructorId));
+      console.log('[ATTENDANCE] Step 19: Settings fetched, exists:', instructorSettingsDoc.exists());
+      if (instructorSettingsDoc.exists()) {
+        const cfg = instructorSettingsDoc.data();
+        const value = cfg?.lateThreshold;
+        if (typeof value === 'number' && !Number.isNaN(value)) {
+          lateThreshold = value;
+        }
+      }
+    } catch (settingsErr: any) {
+      console.warn('[ATTENDANCE] Settings read blocked, using default 15. Code:', settingsErr?.code);
+    }
     console.log('[ATTENDANCE] Step 20: Late threshold:', lateThreshold, 'minutes, time diff:', timeDiffMinutes.toFixed(2));
 
     // Determine status based on time difference

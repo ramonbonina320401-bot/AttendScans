@@ -1074,18 +1074,22 @@ export const DashboardPage: React.FC = () => {
       );
       const recordsData = await getInstructorAttendanceRecords();
 
-      const mappedRecords: AttendanceRecord[] = recordsData.map((r) => ({
-        id: r.id,
-        studentId: r.studentId,
-        name: r.studentName,
-        date: r.date,
-        time: new Date(r.scannedAt).toLocaleTimeString(),
-        status: r.status.toUpperCase() as "PRESENT" | "LATE" | "ABSENT",
-        program: r.program || "N/A",
-        course: r.course || "N/A",
-        section: r.section || "N/A",
-        className: r.className,
-      }));
+      const mappedRecords: AttendanceRecord[] = recordsData.map((r) => {
+        const ts = (r as any).timestamp || new Date(r.scannedAt).getTime();
+        const isoDate = new Date(ts).toISOString().split("T")[0];
+        return {
+          id: r.id,
+          studentId: r.studentId,
+          name: r.studentName,
+          date: isoDate, // normalized YYYY-MM-DD for filtering
+          time: new Date(r.scannedAt).toLocaleTimeString(),
+          status: r.status.toUpperCase() as "PRESENT" | "LATE" | "ABSENT",
+          program: r.program || "N/A",
+          course: r.course || "N/A",
+          section: r.section || "N/A",
+          className: r.className,
+        };
+      });
 
       setRecords(mappedRecords);
       console.log("Dashboard refreshed:", mappedRecords.length, "records");
@@ -1965,18 +1969,22 @@ export const AttendanceRecordsPage: React.FC = () => {
       );
       const recordsData = await getInstructorAttendanceRecords();
 
-      const mappedRecords: AttendanceRecord[] = recordsData.map((r) => ({
-        id: r.id,
-        studentId: r.studentId,
-        name: r.studentName,
-        date: r.date,
-        time: new Date(r.scannedAt).toLocaleTimeString(),
-        status: r.status.toUpperCase() as "PRESENT" | "LATE" | "ABSENT",
-        program: r.program || "N/A",
-        course: r.course || "N/A",
-        section: r.section || "N/A",
-        className: r.className,
-      }));
+      const mappedRecords: AttendanceRecord[] = recordsData.map((r) => {
+        const ts = (r as any).timestamp || new Date(r.scannedAt).getTime();
+        const isoDate = new Date(ts).toISOString().split("T")[0];
+        return {
+          id: r.id,
+          studentId: r.studentId,
+          name: r.studentName,
+          date: isoDate, // normalized YYYY-MM-DD for filtering
+          time: new Date(r.scannedAt).toLocaleTimeString(),
+          status: r.status.toUpperCase() as "PRESENT" | "LATE" | "ABSENT",
+          program: r.program || "N/A",
+          course: r.course || "N/A",
+          section: r.section || "N/A",
+          className: r.className,
+        };
+      });
 
       setRecords(mappedRecords);
       console.log("Attendance records refreshed:", mappedRecords.length);

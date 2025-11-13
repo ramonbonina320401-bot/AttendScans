@@ -821,7 +821,7 @@ const Topbar: React.FC<{ onMenuClick: () => void; onReplayTour?: () => void }> =
                     <button
                       onClick={() => {
                         setShowNotifications(false);
-                        // Could navigate to attendance records page
+                        navigate('/dashboard/records');
                       }}
                       className="w-full text-center text-sm font-medium text-blue-600 hover:text-blue-700"
                     >

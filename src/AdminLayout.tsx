@@ -3938,16 +3938,35 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
         </div>
         <div>
           <Label htmlFor="program">Program</Label>
-          <Input
-            id="program"
-            value={formData.program}
-            onChange={handleChange}
-            placeholder="e.g., BSIT, BSCS, BSBA"
-            required
-          />
-          <p className="text-xs text-gray-500 mt-1">
-            Enter the degree program (e.g., BSIT, BSCS, BSBA)
-          </p>
+          {isLoadingCourses ? (
+            <Input value="Loading programs..." disabled />
+          ) : courseSections.length > 0 ? (
+            <CustomSelect
+              id="program"
+              value={formData.program}
+              onChange={(e) => {
+                const value = e.target.value;
+                setFormData((prev) => ({ ...prev, program: value, course: "", section: "" }));
+              }}
+              required
+            >
+              <option value="">Select a program</option>
+              {Array.from(new Set(courseSections.map((cs) => cs.program || "")))
+                .filter((p) => p)
+                .map((program) => (
+                  <option key={program} value={program}>
+                    {program}
+                  </option>
+                ))}
+            </CustomSelect>
+          ) : (
+            <div>
+              <Input value="No programs available" disabled />
+              <p className="text-xs text-gray-500 mt-1">
+                Please add course-sections in Settings → Courses first
+              </p>
+            </div>
+          )}
         </div>
         <div>
           <Label htmlFor="course">Course Code</Label>
@@ -3957,18 +3976,25 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
             <CustomSelect
               id="course"
               value={formData.course}
-              onChange={handleChange}
+              onChange={(e) => {
+                const value = e.target.value;
+                setFormData((prev) => ({ ...prev, course: value, section: "" }));
+              }}
               required
             >
               <option value="">Select a course code</option>
-              {/* Get unique courses from courseSections */}
-              {Array.from(new Set(courseSections.map((cs) => cs.course))).map(
-                (course) => (
-                  <option key={course} value={course}>
-                    {course}
-                  </option>
+              {/* Unique courses filtered by selected program (if any) */}
+              {Array.from(
+                new Set(
+                  courseSections
+                    .filter((cs) => !formData.program || cs.program === formData.program)
+                    .map((cs) => cs.course)
                 )
-              )}
+              ).map((course) => (
+                <option key={course} value={course}>
+                  {course}
+                </option>
+              ))}
             </CustomSelect>
           ) : (
             <div>
@@ -3991,11 +4017,15 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
               required
             >
               <option value="">Select a section</option>
-              {/* Filter sections based on selected course */}
+              {/* Filter sections based on selected program and course */}
               {courseSections
-                .filter((cs) => cs.course === formData.course)
+                .filter(
+                  (cs) =>
+                    cs.course === formData.course &&
+                    (!formData.program || cs.program === formData.program)
+                )
                 .map((cs) => (
-                  <option key={cs.section} value={cs.section}>
+                  <option key={`${cs.program}-${cs.course}-${cs.section}`} value={cs.section}>
                     Section {cs.section}
                   </option>
                 ))}
@@ -4137,6 +4167,7 @@ export const AdminLayout: React.FC = () => {
   // Fetch data from Firebase on mount
   useEffect(() => {
     let unsubscribe: () => void;
+    let unsubAttendance: (() => void) | undefined;
 
     const initAuthAndFetchData = async () => {
       try {
@@ -4150,6 +4181,10 @@ export const AdminLayout: React.FC = () => {
           if (!user) {
             console.log("No user authenticated, skipping data fetch");
             setIsLoading(false);
+            if (unsubAttendance) {
+              unsubAttendance();
+              unsubAttendance = undefined;
+            }
             return;
           }
 
@@ -4198,6 +4233,41 @@ export const AdminLayout: React.FC = () => {
 
             setStudents(mappedStudents);
             setRecords(mappedRecords);
+
+            // Live updates for attendance records (no manual refresh needed)
+            try {
+              const { collection, query, where, orderBy, onSnapshot, limit } = await import("firebase/firestore");
+              const { db } = await import("./firebase");
+              const q = query(
+                collection(db, 'attendance'),
+                where('instructorId', '==', user.uid),
+                orderBy('scannedAt', 'desc'),
+                limit(300)
+              );
+              if (unsubAttendance) unsubAttendance();
+              unsubAttendance = onSnapshot(q, (snap) => {
+                const liveRecords = snap.docs.map((d) => d.data() as any);
+                const mappedLive: AttendanceRecord[] = liveRecords.map((r: any) => {
+                  const ts = r.timestamp || new Date(r.scannedAt).getTime();
+                  const isoDate = new Date(ts).toISOString().split('T')[0];
+                  return {
+                    id: r.id || `${r.studentId}-${r.classId}-${ts}`,
+                    studentId: r.studentId,
+                    name: r.studentName,
+                    date: isoDate,
+                    time: new Date(r.scannedAt).toLocaleTimeString(),
+                    status: (r.status || 'present').toUpperCase() as 'PRESENT' | 'LATE' | 'ABSENT',
+                    program: r.program || 'N/A',
+                    course: r.course || 'N/A',
+                    section: r.section || 'N/A',
+                    className: r.className,
+                  };
+                });
+                setRecords(mappedLive);
+              });
+            } catch (liveErr) {
+              console.warn('Live attendance subscription failed:', liveErr);
+            }
           } catch (error) {
             console.error("Error fetching dashboard data:", error);
           } finally {
@@ -4214,6 +4284,7 @@ export const AdminLayout: React.FC = () => {
 
     return () => {
       if (unsubscribe) unsubscribe();
+      if (unsubAttendance) unsubAttendance();
     };
   }, []);
 

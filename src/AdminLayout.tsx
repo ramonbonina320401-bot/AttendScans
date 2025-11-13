@@ -1246,6 +1246,31 @@ export const GenerateQrPage: React.FC = () => {
   const [lateThreshold, setLateThreshold] = useState<number>(15); // Grace period in minutes
   const [showSetupModal, setShowSetupModal] = useState(false);
   const [setupStep, setSetupStep] = useState<"courses" | "students" | null>(null);
+  const [remainingSeconds, setRemainingSeconds] = useState<number>(0);
+
+  // Countdown for QR validity (expiry)
+  useEffect(() => {
+    if (!isDeployed || !sessionData?.expiresAt) return;
+    const tick = () => {
+      const end = new Date(sessionData.expiresAt).getTime();
+      const now = Date.now();
+      const diff = Math.max(0, Math.floor((end - now) / 1000));
+      setRemainingSeconds(diff);
+    };
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [isDeployed, sessionData?.expiresAt]);
+
+  const formatCountdown = (secs: number) => {
+    const m = Math.floor(secs / 60)
+      .toString()
+      .padStart(2, "0");
+    const s = Math.floor(secs % 60)
+      .toString()
+      .padStart(2, "0");
+    return `${m}:${s}`;
+  };
 
   // Fetch instructor's courses and settings (late threshold) on mount
   useEffect(() => {
@@ -1549,6 +1574,10 @@ export const GenerateQrPage: React.FC = () => {
                       <div>
                         <p className="text-xs text-gray-500 mb-1">
                           Valid Until
+                          <HelpTooltip
+                            term="Validity"
+                            definition="How long this QR can be scanned. After this time, scans are rejected as expired."
+                          />
                         </p>
                         <p className="font-semibold text-gray-900">
                           {sessionData &&
@@ -1566,7 +1595,13 @@ export const GenerateQrPage: React.FC = () => {
                         </p>
                       </div>
                       <div>
-                        <p className="text-xs text-gray-500 mb-1">Grace Period</p>
+                        <p className="text-xs text-gray-500 mb-1">
+                          Grace Period
+                          <HelpTooltip
+                            term="Grace Period"
+                            definition="Time after QR deployment when a student is still marked Present. Scans after this time but before expiry are marked Late."
+                          />
+                        </p>
                         <p className="font-semibold text-gray-900">
                           {lateThreshold} min
                         </p>
@@ -1575,6 +1610,12 @@ export const GenerateQrPage: React.FC = () => {
                         <p className="text-xs text-gray-500 mb-1">Date</p>
                         <p className="font-semibold text-gray-900">
                           {sessionData?.date}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Expires In</p>
+                        <p className={`font-semibold ${remainingSeconds === 0 ? "text-red-600" : "text-gray-900"}`}>
+                          {formatCountdown(remainingSeconds)}
                         </p>
                       </div>
                     </div>

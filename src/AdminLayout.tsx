@@ -751,24 +751,29 @@ const Topbar: React.FC<{ onMenuClick: () => void; onReplayTour?: () => void }> =
               <span className="sr-only">View notifications</span>
             </Button>
 
-            {showNotifications && (
+            {showNotifications && (() => {
+              const today = new Date().toISOString().split('T')[0];
+              const todayRecords = recentAttendance.filter(r => r.date === today);
+              const earlierRecords = recentAttendance.filter(r => r.date !== today);
+              const hasAnyRecords = recentAttendance.length > 0;
+              
+              return (
               <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-white rounded-md shadow-lg border border-gray-200 max-h-[32rem] overflow-y-auto z-50">
+                {/* Today's Attendance Section */}
                 <div className="p-3 border-b border-gray-200 bg-gray-50">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-semibold text-gray-900">
-                      Recent Attendance
+                      📅 Today's Attendance
                     </h3>
-                    {recentAttendance.length > 0 && (
-                      <span className="text-xs text-gray-500">
-                        Last 5 minutes
-                      </span>
-                    )}
+                    <span className="text-xs text-gray-500">
+                      {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    </span>
                   </div>
                 </div>
 
                 <div className="divide-y divide-gray-100">
-                  {recentAttendance.length > 0 ? (
-                    recentAttendance.map((record, index) => (
+                  {todayRecords.length > 0 ? (
+                    todayRecords.map((record, index) => (
                       <div
                         key={`notification-${record.id}-${index}`}
                         className="p-3 hover:bg-gray-50 cursor-pointer transition-colors"
@@ -804,19 +809,83 @@ const Topbar: React.FC<{ onMenuClick: () => void; onReplayTour?: () => void }> =
                       </div>
                     ))
                   ) : (
-                    <div className="p-8 text-center">
-                      <FiBell className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                    <div className="p-6 text-center">
+                      <FiBell className="w-10 h-10 text-gray-300 mx-auto mb-2" />
                       <p className="text-sm font-medium text-gray-900">
-                        No recent attendance
+                        No attendance today
                       </p>
                       <p className="text-xs text-gray-500 mt-1">
-                        New attendance scans will appear here
+                        Today's scans will appear here
                       </p>
                     </div>
                   )}
                 </div>
 
-                {recentAttendance.length > 0 && (
+                {/* Earlier This Week Section */}
+                {earlierRecords.length > 0 && (
+                  <>
+                    <div className="p-2 bg-gray-100 border-t border-gray-200">
+                      <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                        📋 Earlier This Week
+                      </h4>
+                    </div>
+                    <div className="divide-y divide-gray-100 max-h-48 overflow-y-auto">
+                      {earlierRecords.slice(0, 5).map((record, index) => (
+                        <div
+                          key={`earlier-${record.id}-${index}`}
+                          className="p-3 hover:bg-gray-50 cursor-pointer transition-colors"
+                        >
+                          <div className="flex items-start space-x-3">
+                            <div className="flex-shrink-0">
+                              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                                <FiUsers className="w-5 h-5 text-blue-600" />
+                              </div>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-900">
+                                {record.name}
+                              </p>
+                              <p className="text-xs text-gray-500 mt-0.5">
+                                {record.course} - Section {record.section}
+                              </p>
+                              {record.className && (
+                                <p className="text-xs text-gray-600 mt-1">
+                                  {record.className}
+                                </p>
+                              )}
+                              <p className="text-xs text-gray-400 mt-1">
+                                {record.time} - {record.date}
+                              </p>
+                            </div>
+                            <div className="flex-shrink-0">
+                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                record.status === 'PRESENT' ? 'bg-green-100 text-green-800' :
+                                record.status === 'LATE' ? 'bg-yellow-100 text-yellow-800' :
+                                'bg-red-100 text-red-800'
+                              }`}>
+                                {record.status}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+
+                {!hasAnyRecords && (
+                  <div className="p-8 text-center">
+                    <FiBell className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                    <p className="text-sm font-medium text-gray-900">
+                      No recent attendance
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      New attendance scans will appear here
+                    </p>
+                  </div>
+                )}
+
+                {hasAnyRecords && (
                   <div className="p-3 border-t border-gray-200 bg-gray-50">
                     <button
                       onClick={() => {
@@ -830,7 +899,8 @@ const Topbar: React.FC<{ onMenuClick: () => void; onReplayTour?: () => void }> =
                   </div>
                 )}
               </div>
-            )}
+              );
+            })()}
           </div>
           <div className="relative" ref={dropdownRef}>
             <button
@@ -1058,7 +1128,7 @@ const MobileSidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
  * 1. DASHBOARD PAGE
  */
 export const DashboardPage: React.FC = () => {
-  const { stats, setRecords } = useDashboard();
+  const { stats, setRecords, records } = useDashboard();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [todayStats, setTodayStats] = useState({
     present: 0,
@@ -1101,14 +1171,16 @@ export const DashboardPage: React.FC = () => {
   };
 
   useEffect(() => {
-    // Calculate today's stats from total records
-    // For now showing proportional values based on total stats
-    setTodayStats({
-      present: Math.round(stats.present * 0.7), // Mock today percentage
-      late: Math.round(stats.late * 0.8),
-      absent: Math.round(stats.absent * 0.5),
-    });
-  }, [stats]);
+    // Calculate today's stats from actual today's records
+    const today = new Date().toISOString().split('T')[0];
+    const todayRecords = records.filter(r => r.date === today);
+    
+    const present = todayRecords.filter(r => r.status === 'PRESENT').length;
+    const late = todayRecords.filter(r => r.status === 'LATE').length;
+    const absent = todayRecords.filter(r => r.status === 'ABSENT').length;
+    
+    setTodayStats({ present, late, absent });
+  }, [records]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -1136,37 +1208,37 @@ export const DashboardPage: React.FC = () => {
               title="TOTAL ATTENDANCE"
               value={stats.total}
               percentage={100}
-              description="All attendance records"
+              description="All-time records"
             />
             <StatCard
               title="PRESENT TODAY"
               value={todayStats.present}
               percentage={
-                stats.total > 0
-                  ? Math.round((todayStats.present / stats.total) * 100)
+                (todayStats.present + todayStats.late + todayStats.absent) > 0
+                  ? Math.round((todayStats.present / (todayStats.present + todayStats.late + todayStats.absent)) * 100)
                   : 0
               }
-              description="Marked as present"
+              description="On time today"
             />
             <StatCard
               title="LATE TODAY"
               value={todayStats.late}
               percentage={
-                stats.total > 0
-                  ? Math.round((todayStats.late / stats.total) * 100)
+                (todayStats.present + todayStats.late + todayStats.absent) > 0
+                  ? Math.round((todayStats.late / (todayStats.present + todayStats.late + todayStats.absent)) * 100)
                   : 0
               }
-              description="Arrived after schedule"
+              description="Arrived late today"
             />
             <StatCard
               title="ABSENT TODAY"
               value={todayStats.absent}
               percentage={
-                stats.total > 0
-                  ? Math.round((todayStats.absent / stats.total) * 100)
+                (todayStats.present + todayStats.late + todayStats.absent) > 0
+                  ? Math.round((todayStats.absent / (todayStats.present + todayStats.late + todayStats.absent)) * 100)
                   : 0
               }
-              description="No attendance recorded"
+              description="No scan today"
             />
           </div>
         </CardContent>

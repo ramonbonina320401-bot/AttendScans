@@ -23,7 +23,9 @@ interface StudentFormData {
 }
 
 interface InstructorFormData {
-  fullName: string;
+  firstName: string;
+  lastName: string;
+  middleInitial: string;
   email: string;
   password: string;
   accessKey: string;
@@ -50,7 +52,9 @@ export default function Signup() {
   });
   const [instructorFormData, setInstructorFormData] =
     useState<InstructorFormData>({
-      fullName: "",
+      firstName: "",
+      lastName: "",
+      middleInitial: "",
       email: "",
       password: "",
       accessKey: "",
@@ -112,7 +116,8 @@ export default function Signup() {
       );
     } else {
       setIsFormValid(
-        !!instructorFormData.fullName.trim() &&
+        !!instructorFormData.firstName.trim() &&
+        !!instructorFormData.lastName.trim() &&
           !!instructorFormData.email.trim() &&
           !!instructorFormData.password &&
           instructorFormData.password.length >= 6 &&
@@ -167,7 +172,7 @@ export default function Signup() {
       studentId: "",
       password: "",
     });
-    setInstructorFormData({ fullName: "", email: "", password: "", accessKey: "" });
+    setInstructorFormData({ firstName: "", lastName: "", middleInitial: "", email: "", password: "", accessKey: "" });
   };
 
   const handleStudentInputChange = (
@@ -240,8 +245,10 @@ export default function Signup() {
       if (!studentFormData.password || studentFormData.password.length < 6)
         newErrors.password = "Password must be at least 6 characters";
     } else {
-      if (!instructorFormData.fullName.trim())
-        newErrors.fullName = "Full Name is required";
+      if (!instructorFormData.firstName.trim())
+        newErrors.firstName = "First Name is required";
+      if (!instructorFormData.lastName.trim())
+        newErrors.lastName = "Last Name is required";
       if (!instructorFormData.email.trim())
         newErrors.email = "Email Address is required";
       else if (!/\S+@\S+\.\S+/.test(instructorFormData.email))
@@ -359,7 +366,9 @@ export default function Signup() {
           }
         : { 
             role: "instructor",
-            fullName: instructorFormData.fullName,
+            firstName: instructorFormData.firstName,
+            lastName: instructorFormData.lastName,
+            middleInitial: instructorFormData.middleInitial,
             email: instructorFormData.email,
             createdAt: new Date().toISOString()
           };
@@ -557,28 +566,73 @@ export default function Signup() {
   const InstructorInputs = (
     <>
       <div className="animate-fade-in space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label
+              htmlFor="firstName"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              First Name *
+            </label>
+            <input
+              type="text"
+              id="firstName"
+              name="firstName"
+              placeholder="Juan"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
+              value={instructorFormData.firstName}
+              onChange={handleInstructorInputChange}
+              required
+            />
+            {errors.firstName && (
+              <p className="text-red-500 text-sm mt-1 animate-shake">
+                {errors.firstName}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label
+              htmlFor="lastName"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              Last Name *
+            </label>
+            <input
+              type="text"
+              id="lastName"
+              name="lastName"
+              placeholder="Dela Cruz"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
+              value={instructorFormData.lastName}
+              onChange={handleInstructorInputChange}
+              required
+            />
+            {errors.lastName && (
+              <p className="text-red-500 text-sm mt-1 animate-shake">
+                {errors.lastName}
+              </p>
+            )}
+          </div>
+        </div>
+
         <div>
           <label
-            htmlFor="fullName"
+            htmlFor="middleInitial"
             className="block text-sm font-medium text-gray-700 mb-1"
           >
-            Full Name
+            Middle Initial (Optional)
           </label>
           <input
             type="text"
-            id="fullName"
-            name="fullName"
-            placeholder="Enter your full name"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
-            value={instructorFormData.fullName}
+            id="middleInitial"
+            name="middleInitial"
+            placeholder="A."
+            maxLength={2}
+            className="w-20 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
+            value={instructorFormData.middleInitial}
             onChange={handleInstructorInputChange}
-            required
           />
-          {errors.fullName && (
-            <p className="text-red-500 text-sm mt-1 animate-shake">
-              {errors.fullName}
-            </p>
-          )}
         </div>
 
         <div>

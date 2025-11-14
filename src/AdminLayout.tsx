@@ -477,7 +477,12 @@ TabsContent.displayName = "TabsContent";
 
 // --- LAYOUT COMPONENTS (Sidebar, Topbar) ---
 
-const Topbar: React.FC<{ onMenuClick: () => void; onReplayTour?: () => void }> = ({ onMenuClick, onReplayTour }) => {
+const Topbar: React.FC<{ 
+  onMenuClick: () => void; 
+  onReplayTour?: () => void;
+  instructorLastName?: string;
+  instructorInitial?: string;
+}> = ({ onMenuClick, onReplayTour, instructorLastName = "Instructor", instructorInitial = "I" }) => {
   const navigate = useNavigate();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -909,11 +914,11 @@ const Topbar: React.FC<{ onMenuClick: () => void; onReplayTour?: () => void }> =
             >
               <img
                 className="w-8 h-8 rounded-full"
-                src="https://ui-avatars.com/api/?name=Instructor&background=333&color=fff&rounded=true&size=32"
-                alt="Instructor"
+                src={`https://ui-avatars.com/api/?name=${instructorInitial}&background=333&color=fff&rounded=true&size=32`}
+                alt={instructorLastName}
               />
               <span className="hidden md:block font-medium text-gray-700 text-sm">
-                Instructor
+                {instructorLastName}
               </span>
               <FiChevronDown className="hidden md:block w-4 h-4 text-gray-500" />{" "}
               {/* ICON RESTORED */}
@@ -4204,6 +4209,10 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
 export const AdminLayout: React.FC = () => {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [showTour, setShowTour] = useState(false);
+  
+  // Instructor info state
+  const [instructorLastName, setInstructorLastName] = useState("Instructor");
+  const [instructorInitial, setInstructorInitial] = useState("I");
 
   // --- CENTRALIZED STATE ---
   const [students, setStudents] = useState<Student[]>([]);
@@ -4263,6 +4272,22 @@ export const AdminLayout: React.FC = () => {
               unsubAttendance = undefined;
             }
             return;
+          }
+
+          // Fetch instructor's name from Firestore
+          try {
+            const { doc, getDoc } = await import("firebase/firestore");
+            const { db } = await import("./firebase");
+            const userDoc = await getDoc(doc(db, "users", user.uid));
+            if (userDoc.exists()) {
+              const userData = userDoc.data();
+              const lastName = userData.lastName || "Instructor";
+              const initial = lastName.charAt(0).toUpperCase();
+              setInstructorLastName(lastName);
+              setInstructorInitial(initial);
+            }
+          } catch (error) {
+            console.error("Error fetching instructor info:", error);
           }
 
           // User is authenticated, fetch data
@@ -4471,7 +4496,12 @@ export const AdminLayout: React.FC = () => {
         />
 
         <div className="flex-1 flex flex-col lg:pl-64">
-          <Topbar onMenuClick={() => setIsMobileSidebarOpen(true)} onReplayTour={handleReplayTour} />
+          <Topbar 
+            onMenuClick={() => setIsMobileSidebarOpen(true)} 
+            onReplayTour={handleReplayTour}
+            instructorLastName={instructorLastName}
+            instructorInitial={instructorInitial}
+          />
           <main className="flex-1 p-4 lg:p-6">
             {/* Router renders the matching page component here */}
             <Outlet />

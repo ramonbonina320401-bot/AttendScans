@@ -12,6 +12,7 @@ export interface QRCodeData {
   sessionId: string; // Unique 8-character alphanumeric code
   course: string; // Course name (e.g., "CS101")
   section: string; // Section identifier (e.g., "A", "B")
+  deployedAt?: string; // When QR was actually deployed (for late calculation)
 }
 
 export interface AttendanceRecord {
@@ -218,9 +219,11 @@ export const markAttendance = async (qrData: QRCodeData): Promise<{ success: boo
     // Check if student is late based on instructor's late threshold setting
     console.log('[ATTENDANCE] Step 17: Calculating late status');
     const now = new Date();
-    const qrCodeCreationTime = new Date(qrData.timestamp);
+    // Use deployedAt if available (when grace period starts), fallback to timestamp
+    const deploymentTime = new Date(qrData.deployedAt || qrData.timestamp);
     const currentTime = now;
-    const timeDiffMinutes = (currentTime.getTime() - qrCodeCreationTime.getTime()) / (1000 * 60);
+    const timeDiffMinutes = (currentTime.getTime() - deploymentTime.getTime()) / (1000 * 60);
+    console.log('[ATTENDANCE] Deployment time:', qrData.deployedAt || qrData.timestamp, 'Time since deployment:', timeDiffMinutes.toFixed(2), 'min');
 
     // Fetch instructor's late threshold setting
     console.log('[ATTENDANCE] Step 18: Fetching instructor settings');

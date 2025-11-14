@@ -90,7 +90,7 @@ const StudentDashboard: React.FC = () => {
   // --- Inactivity Auto-Logout (Student) ---
   useEffect(() => {
     const TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
-    let timer: number | undefined;
+     let timer: number | undefined;
 
     const logoutForInactivity = async () => {
       try {
@@ -244,6 +244,7 @@ const StudentDashboard: React.FC = () => {
         sessionId: sessionData.sessionId,
         course: sessionData.course || "",
         section: sessionData.section || "",
+        deployedAt: sessionData.deployedAt, // Include deployment time for late calculation
       };
 
       // Mark attendance using the service

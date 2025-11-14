@@ -85,6 +85,8 @@ export const verifyQRCode = (qrData: QRCodeData): boolean => {
 export const markAttendance = async (qrData: QRCodeData): Promise<{ success: boolean; message: string }> => {
   try {
     console.log('[ATTENDANCE] Step 1: Starting markAttendance');
+    console.log('[ATTENDANCE] QR Data received:', JSON.stringify(qrData, null, 2));
+    console.log('[ATTENDANCE] Has deployedAt?', !!qrData.deployedAt, 'Value:', qrData.deployedAt);
     const user = auth.currentUser;
     if (!user) {
       console.log('[ATTENDANCE] Error: User not authenticated');

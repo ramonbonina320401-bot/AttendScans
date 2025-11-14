@@ -48,7 +48,8 @@ service cloud.firestore {
     
     // User-specific settings (late threshold, personal preferences, etc.)
     match /settings/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null; // Any authenticated user can read (students need late threshold)
+      allow write: if request.auth != null && request.auth.uid == userId; // Only owner can write
     }
   }
 }

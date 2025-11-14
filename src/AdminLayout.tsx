@@ -823,9 +823,9 @@ const Topbar: React.FC<{ onMenuClick: () => void; onReplayTour?: () => void }> =
                         setShowNotifications(false);
                         navigate('/dashboard/records');
                       }}
-                      className="w-full text-center text-sm font-medium text-blue-600 hover:text-blue-700"
+                      className="w-full text-center text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 py-2 px-4 rounded-md transition-colors cursor-pointer"
                     >
-                      View All Attendance Records
+                      📊 View All Attendance Records
                     </button>
                   </div>
                 )}
@@ -839,11 +839,11 @@ const Topbar: React.FC<{ onMenuClick: () => void; onReplayTour?: () => void }> =
             >
               <img
                 className="w-8 h-8 rounded-full"
-                src="https://ui-avatars.com/api/?name=Admin&background=333&color=fff&rounded=true&size=32"
-                alt="Admin"
+                src="https://ui-avatars.com/api/?name=Instructor&background=333&color=fff&rounded=true&size=32"
+                alt="Instructor"
               />
               <span className="hidden md:block font-medium text-gray-700 text-sm">
-                Admin
+                Instructor
               </span>
               <FiChevronDown className="hidden md:block w-4 h-4 text-gray-500" />{" "}
               {/* ICON RESTORED */}
@@ -3701,7 +3701,7 @@ export const SettingsPage: React.FC = () => {
           <TabsContent value="admin" className="pt-6">
             <form onSubmit={handlePasswordUpdate} className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="admin-email">Admin Email</Label>
+                <Label htmlFor="admin-email">Instructor Email</Label>
                 <Input
                   id="admin-email"
                   type="email"

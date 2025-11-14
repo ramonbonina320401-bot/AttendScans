@@ -1419,11 +1419,16 @@ export const GenerateQrPage: React.FC = () => {
         course,
         section
       );
-      console.log("Generated QR data:", qrData);
-      setSessionData(qrData);
+      
+      // Add deployedAt timestamp to QR data for late calculation
+      const deployedAtTime = new Date().toISOString();
+      const qrDataWithDeployment = { ...qrData, deployedAt: deployedAtTime };
+      
+      console.log("Generated QR data with deployment time:", qrDataWithDeployment);
+      setSessionData(qrDataWithDeployment);
 
-      // Generate QR code image
-      const qrString = JSON.stringify(qrData);
+      // Generate QR code image with deployedAt included
+      const qrString = JSON.stringify(qrDataWithDeployment);
       const qrImageUrl = await QRCode.toDataURL(qrString, {
         width: 300,
         margin: 2,
@@ -1461,7 +1466,7 @@ export const GenerateQrPage: React.FC = () => {
         date: qrData.date,
         course: qrData.course,
         section: qrData.section,
-        deployedAt: new Date().toISOString(),
+        deployedAt: qrData.deployedAt || new Date().toISOString(), // Use qrData's deployedAt to match QR code
       });
       console.log(
         "Active session saved to Firestore with sessionId:",

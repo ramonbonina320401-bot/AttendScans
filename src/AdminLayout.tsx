@@ -2544,76 +2544,58 @@ export const StudentManagementPage: React.FC = () => {
 
   const handleDownloadTemplate = async () => {
     try {
-      // Dynamically import xlsx
       const XLSX = await import('xlsx');
-      
-      // Create template data with headers and example rows
-      // Using the 00-0000 format for Student ID
-      const templateData = [
-        {
-          'STUDENT ID': '21-1234',
-          'LAST NAME': 'Doe',
-          'FIRST NAME': 'John',
-          'MIDDLE INITIAL': 'A',
-          'EMAIL': 'john.doe@example.com',
-          'PROGRAM': 'BSIT',
-          'COURSE': 'IM101',
-          'SECTION': '1-4'
-        },
-        {
-          'STUDENT ID': '21-5678',
-          'LAST NAME': 'Smith',
-          'FIRST NAME': 'Jane',
-          'MIDDLE INITIAL': 'B',
-          'EMAIL': 'jane.smith@example.com',
-          'PROGRAM': 'BSCS',
-          'COURSE': 'CS201',
-          'SECTION': 'A'
-        },
-        {
-          'STUDENT ID': '22-0001',
-          'LAST NAME': '',
-          'FIRST NAME': '',
-          'MIDDLE INITIAL': '',
-          'EMAIL': '',
-          'PROGRAM': '',
-          'COURSE': '',
-          'SECTION': ''
-        }
-      ];
 
-      // Create workbook and worksheet
-      const worksheet = XLSX.utils.json_to_sheet(templateData);
-      
-      // Format Student ID column as text to preserve the dash
-      const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
-      for (let row = range.s.r + 1; row <= range.e.r; row++) {
-        const cellAddress = XLSX.utils.encode_cell({ r: row, c: 0 });
-        if (worksheet[cellAddress]) {
-          worksheet[cellAddress].t = 's'; // Set cell type to string
-          worksheet[cellAddress].z = '@'; // Set format to text
+      // Fetch first course section (program / course / section) for header, if available
+      let headerProgram = '';
+      let headerCourse = '';
+      let headerSection = '';
+      try {
+        const { auth, db } = await import('./firebase');
+        const { doc, getDoc } = await import('firebase/firestore');
+        const user = auth.currentUser;
+        if (user) {
+          const courseDoc = await getDoc(doc(db, 'instructorCourses', user.uid));
+            if (courseDoc.exists()) {
+              const list = courseDoc.data().courseSections || [];
+              if (Array.isArray(list) && list.length > 0) {
+                headerProgram = list[0].program || '';
+                headerCourse = list[0].course || '';
+                headerSection = list[0].section || '';
+              }
+            }
         }
+      } catch (e) {
+        console.warn('Could not fetch courseSections for template header', e);
       }
-      
-      // Set column widths
+
+      // Build rows manually for desired layout:
+      // PROGRAM | BSIT
+      // Subject Code | IT EL 3
+      // Section | 3-4
+      // (blank)
+      // Student Name | Email
+      const rows: any[][] = [];
+      rows.push(['PROGRAM', headerProgram]);
+      rows.push(['Subject Code', headerCourse]);
+      rows.push(['Section', headerSection]);
+      rows.push([]); // blank separator
+      rows.push(['Student Name', 'Email']);
+      // Example entries
+      rows.push(['ABULENCIA, PETTER CAREY TALISAY', 'petter.carey@example.com']);
+      rows.push(['AGUS, JAMES TAHUM', 'james.tahum@example.com']);
+      rows.push(['(Add more rows below)', '(email@example.com)']);
+
+      const worksheet = XLSX.utils.aoa_to_sheet(rows);
       worksheet['!cols'] = [
-        { wch: 15 },  // STUDENT ID
-        { wch: 20 },  // LAST NAME
-        { wch: 20 },  // FIRST NAME
-        { wch: 15 },  // MIDDLE INITIAL
-        { wch: 30 },  // EMAIL
-        { wch: 12 },  // PROGRAM
-        { wch: 12 },  // COURSE
-        { wch: 10 }   // SECTION
+        { wch: 40 }, // Student Name
+        { wch: 30 }  // Email
       ];
 
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, 'Students');
-
-      // Generate Excel file and trigger download
       XLSX.writeFile(workbook, 'Student_Import_Template.xlsx');
-      
-      alert('📥 Template downloaded!\n\n💡 TIP: Student ID format is 00-0000 (e.g., 21-1234, 22-5678)\nMake sure to keep the dash when entering IDs.');
+      alert('📥 Template downloaded!\n\nFormat: \nRow 1: PROGRAM | <program>\nRow 2: Subject Code | <subject code>\nRow 3: Section | <section>\nRow 5 onward: Student Name (LAST, FIRST M.) and Email.');
     } catch (error) {
       console.error('Error creating template:', error);
       alert('Failed to download template. Please try again.');
@@ -2634,91 +2616,59 @@ export const StudentManagementPage: React.FC = () => {
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data);
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      const jsonData = XLSX.utils.sheet_to_json(worksheet) as any[];
+      // Read raw rows (array of arrays) to support new template layout
+      const rows: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' }) as any[][];
 
-      if (jsonData.length === 0) {
+      if (rows.length === 0) {
         alert('The Excel file is empty. Please add student data and try again.');
         setIsImporting(false);
         return;
       }
 
-      // Validate and process the imported data
+      // Extract header metadata
+      const programRow = rows.find(r => r[0] && r[0].toString().toLowerCase() === 'program');
+      const subjectRow = rows.find(r => r[0] && r[0].toString().toLowerCase() === 'subject code');
+      const sectionRow = rows.find(r => r[0] && r[0].toString().toLowerCase() === 'section');
+      const program = programRow ? (programRow[1] || '').toString().trim() : '';
+      const course = subjectRow ? (subjectRow[1] || '').toString().trim() : ''; // map Subject Code -> course
+      const section = sectionRow ? (sectionRow[1] || '').toString().trim() : '';
+
+      // Find the index of the header row for student list
+      const studentHeaderIndex = rows.findIndex(r => r[0] && r[0].toString().toLowerCase() === 'student name');
+      if (studentHeaderIndex === -1) {
+        alert('Could not find "Student Name" header. Please ensure the template format is correct.');
+        setIsImporting(false);
+        return;
+      }
+
+      // Rows after header until end (skip blank name cells)
+      const studentRows = rows.slice(studentHeaderIndex + 1).filter(r => r[0] && r[0].toString().trim() !== '' && !r[0].toString().includes('(Add more rows')); 
+
       const { addStudentToClass } = await import('./services/adminService');
       let successCount = 0;
       let failCount = 0;
       const errors: string[] = [];
 
-      for (const row of jsonData) {
-        // Skip empty rows or example rows
-        if (!row['STUDENT ID'] || !row['EMAIL'] || !row['FIRST NAME'] || !row['LAST NAME']) {
-          continue;
-        }
-
+      for (const r of studentRows) {
         try {
-          // Get and format Student ID
-          let studentId = row['STUDENT ID']?.toString().trim();
-          
-          // Validate Student ID format (00-0000)
-          // Handle cases where Excel might convert it to a number or remove the dash
-          if (studentId) {
-            // If it's a number without dash, try to format it
-            if (!studentId.includes('-')) {
-              // If it's 6 digits like "211234", format as "21-1234"
-              if (studentId.length === 6 && /^\d+$/.test(studentId)) {
-                studentId = `${studentId.substring(0, 2)}-${studentId.substring(2)}`;
-              }
-            }
-            
-            // Validate the final format
-            const studentIdRegex = /^\d{2}-\d{4}$/;
-            if (!studentIdRegex.test(studentId)) {
-              errors.push(`Row with Student ID "${row['STUDENT ID']}": Invalid format. Use 00-0000 format (e.g., 21-1234)`);
-              failCount++;
-              continue;
-            }
-          }
-
-          // Format the name: "LAST NAME, FIRST NAME MIDDLE INITIAL"
-          const middleInitial = row['MIDDLE INITIAL'] ? ` ${row['MIDDLE INITIAL']}.` : '';
-          const fullName = `${row['LAST NAME']}, ${row['FIRST NAME']}${middleInitial}`;
-
-          // Format course: "PROGRAM - COURSE - Section SECTION"
-          const program = row['PROGRAM']?.trim() || '';
-          const course = row['COURSE']?.trim() || '';
-          const section = row['SECTION']?.trim() || '';
-
-          if (!program || !course || !section) {
-            errors.push(`Row with Student ID ${studentId}: Missing PROGRAM, COURSE, or SECTION`);
-            failCount++;
-            continue;
-          }
-
-          const studentData = {
-            name: fullName.trim(),
-            email: row['EMAIL']?.toString().trim().toLowerCase() || '',
-            program: program,
-            course: course,
-            section: section,
-          };
-
-          // Validate email format
+          const rawName = r[0].toString().trim();
+          const email = (r[1] || '').toString().trim().toLowerCase();
+          if (!rawName) { continue; }
+          if (!email) { errors.push(`${rawName}: Missing email`); failCount++; continue; }
+          if (!program || !course || !section) { errors.push(`${rawName}: Missing PROGRAM, Subject Code or Section headers above`); failCount++; continue; }
           const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-          if (!emailRegex.test(studentData.email)) {
-            errors.push(`Row with Student ID ${studentId}: Invalid email format`);
-            failCount++;
-            continue;
-          }
+          if (!emailRegex.test(email)) { errors.push(`${rawName}: Invalid email format`); failCount++; continue; }
 
-          const result = await addStudentToClass(studentData);
-          
-          if (result.success) {
-            successCount++;
-          } else {
-            errors.push(`${studentId} - ${row['FIRST NAME']} ${row['LAST NAME']}: ${result.message}`);
-            failCount++;
-          }
+          const result = await addStudentToClass({
+            name: rawName,
+            email,
+            program,
+            course,
+            section
+          });
+          if (result.success) { successCount++; } else { errors.push(`${rawName}: ${result.message}`); failCount++; }
         } catch (err: any) {
-          errors.push(`${row['STUDENT ID']}: ${err.message}`);
+          errors.push(`${r[0]}: ${err.message}`);
           failCount++;
         }
       }

@@ -1,8 +1,11 @@
 import React from "react";
 export interface Student {
     id: string;
+    studentId?: string;
+    displayStudentId?: string;
     name: string;
     email: string;
+    program: string;
     course: string;
     section: string;
 }
@@ -13,6 +16,7 @@ export interface AttendanceRecord {
     date: string;
     time: string;
     status: "PRESENT" | "LATE" | "ABSENT";
+    program: string;
     course: string;
     section: string;
     className?: string;

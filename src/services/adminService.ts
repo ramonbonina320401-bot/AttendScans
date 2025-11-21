@@ -148,6 +148,7 @@ export const getAttendanceStats = async () => {
 
 // Add student to instructor's class
 export const addStudentToClass = async (studentData: {
+  studentId?: string; // actual institutional ID (e.g., 23-3289) if provided
   name: string;
   email: string;
   program: string;
@@ -158,12 +159,18 @@ export const addStudentToClass = async (studentData: {
     const user = auth.currentUser;
     if (!user) throw new Error("User not authenticated");
 
-    // Generate student ID
-    const studentId = `STU${String(Math.floor(Math.random() * 90000) + 10000)}`;
+    // Use provided studentId if valid else generate internal fallback
+    let studentId = (studentData.studentId || '').trim();
+    const idFormat = /^\d{2}-\d{4}$/; // expected pattern like 23-3289
+    if (!idFormat.test(studentId)) {
+      // Fallback internal ID (still stored but not shown as official ID)
+      studentId = `STU${String(Math.floor(Math.random() * 90000) + 10000)}`;
+    }
 
     // Add to registeredStudents collection (instructor's student list)
     await addDoc(collection(db, 'registeredStudents'), {
       studentId,
+      displayStudentId: studentData.studentId && idFormat.test(studentData.studentId.trim()) ? studentData.studentId.trim() : studentId,
       name: studentData.name,
       email: studentData.email.toLowerCase().trim(), // Normalize email
       program: studentData.program,
@@ -192,12 +199,20 @@ export const removeStudent = async (studentId: string) => {
 };
 
 // Update student
-export const updateStudent = async (studentId: string, studentData: { name: string; email: string; program: string; course: string; section: string }) => {
+export const updateStudent = async (studentId: string, studentData: { studentId?: string; name: string; email: string; program: string; course: string; section: string }) => {
   try {
-    await updateDoc(doc(db, 'registeredStudents', studentId), {
-      ...studentData,
-      email: studentData.email.toLowerCase().trim() // Normalize email
-    });
+    const idFormat = /^\d{2}-\d{4}$/;
+    const updatePayload: any = {
+      name: studentData.name,
+      email: studentData.email.toLowerCase().trim(),
+      program: studentData.program,
+      course: studentData.course,
+      section: studentData.section
+    };
+    if (studentData.studentId && idFormat.test(studentData.studentId.trim())) {
+      updatePayload.displayStudentId = studentData.studentId.trim();
+    }
+    await updateDoc(doc(db, 'registeredStudents', studentId), updatePayload);
     return { success: true, message: "Student updated successfully" };
   } catch (error: any) {
     console.error("Error updating student:", error);

@@ -46,7 +46,9 @@ import { HelpTooltip } from "./components/HelpTooltip";
 
 // --- TYPE DEFINITIONS ---
 export interface Student {
-  id: string;
+  id: string;              // Firestore document id
+  studentId?: string;      // Internal generated id (legacy) – not displayed
+  displayStudentId?: string; // Actual institutional ID (e.g., 23-3289)
   name: string;
   email: string;
   program: string;  // e.g., "BSIT", "BSCS"
@@ -2574,20 +2576,21 @@ export const StudentManagementPage: React.FC = () => {
       // Subject Code | IT EL 3
       // Section | 3-4
       // (blank)
-      // Student Name | Email
+      // Student ID | Student Name | Email
       const rows: any[][] = [];
       rows.push(['PROGRAM', headerProgram]);
       rows.push(['Subject Code', headerCourse]);
       rows.push(['Section', headerSection]);
       rows.push([]); // blank separator
-      rows.push(['Student Name', 'Email']);
+      rows.push(['Student ID', 'Student Name', 'Email']);
       // Example entries
-      rows.push(['ABULENCIA, PETTER CAREY TALISAY', 'petter.carey@example.com']);
-      rows.push(['AGUS, JAMES TAHUM', 'james.tahum@example.com']);
-      rows.push(['(Add more rows below)', '(email@example.com)']);
+      rows.push(['23-3289', 'ABULENCIA, PETTER CAREY TALISAY', 'petter.carey@example.com']);
+      rows.push(['23-3291', 'AGUS, JAMES TAHUM', 'james.tahum@example.com']);
+      rows.push(['(Add more rows below)', '(LAST, FIRST M.)', '(email@example.com)']);
 
       const worksheet = XLSX.utils.aoa_to_sheet(rows);
       worksheet['!cols'] = [
+        { wch: 12 }, // Student ID
         { wch: 40 }, // Student Name
         { wch: 30 }  // Email
       ];
@@ -2595,7 +2598,7 @@ export const StudentManagementPage: React.FC = () => {
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, 'Students');
       XLSX.writeFile(workbook, 'Student_Import_Template.xlsx');
-      alert('📥 Template downloaded!\n\nFormat: \nRow 1: PROGRAM | <program>\nRow 2: Subject Code | <subject code>\nRow 3: Section | <section>\nRow 5 onward: Student Name (LAST, FIRST M.) and Email.');
+      alert('📥 Template downloaded!\n\nFormat: \nRow 1: PROGRAM | <program>\nRow 2: Subject Code | <subject code>\nRow 3: Section | <section>\nRow 5 onward: Student ID | Student Name (LAST, FIRST M.) | Email.');
     } catch (error) {
       console.error('Error creating template:', error);
       alert('Failed to download template. Please try again.');
@@ -2633,42 +2636,74 @@ export const StudentManagementPage: React.FC = () => {
       const course = subjectRow ? (subjectRow[1] || '').toString().trim() : ''; // map Subject Code -> course
       const section = sectionRow ? (sectionRow[1] || '').toString().trim() : '';
 
-      // Find the index of the header row for student list
-      const studentHeaderIndex = rows.findIndex(r => r[0] && r[0].toString().toLowerCase() === 'student name');
+      // Locate student header row supporting new & legacy formats
+      const studentHeaderIndexNew = rows.findIndex(r => {
+        const c0 = (r[0] || '').toString().toLowerCase().trim();
+        const c1 = (r[1] || '').toString().toLowerCase().trim();
+        return c0 === 'student id' && c1.startsWith('student name');
+      });
+      let studentHeaderIndex = studentHeaderIndexNew;
+      let usingLegacy = false;
       if (studentHeaderIndex === -1) {
-        alert('Could not find "Student Name" header. Please ensure the template format is correct.');
+        // Legacy format: first column header was 'Student Name'
+        studentHeaderIndex = rows.findIndex(r => (r[0] || '').toString().toLowerCase().trim() === 'student name');
+        if (studentHeaderIndex !== -1) usingLegacy = true;
+      }
+      if (studentHeaderIndex === -1) {
+        alert('Could not find student header row. Expected "Student ID | Student Name | Email" or legacy "Student Name | Email".');
         setIsImporting(false);
         return;
       }
 
-      // Rows after header until end (skip blank name cells)
-      const studentRows = rows.slice(studentHeaderIndex + 1).filter(r => r[0] && r[0].toString().trim() !== '' && !r[0].toString().includes('(Add more rows')); 
+      // Slice student rows and filter out placeholder / blank rows
+      const studentRows = rows.slice(studentHeaderIndex + 1).filter(r => {
+        const nameCell = usingLegacy ? (r[0] || '').toString().trim() : (r[1] || '').toString().trim();
+        return nameCell !== '' && !nameCell.includes('(Add more rows');
+      });
 
       const { addStudentToClass } = await import('./services/adminService');
       let successCount = 0;
       let failCount = 0;
       const errors: string[] = [];
+      const seenEmails = new Set<string>();
+      const seenStudentIds = new Set<string>();
 
       for (const r of studentRows) {
+        let rawName = '';
+        let studentIdRaw = '';
         try {
-          const rawName = r[0].toString().trim();
-          const email = (r[1] || '').toString().trim().toLowerCase();
+          studentIdRaw = usingLegacy ? '' : (r[0] || '').toString().trim();
+          rawName = usingLegacy ? (r[0] || '').toString().trim() : (r[1] || '').toString().trim();
+          const email = (usingLegacy ? (r[1] || '') : (r[2] || '')).toString().trim().toLowerCase();
+
           if (!rawName) { continue; }
-          if (!email) { errors.push(`${rawName}: Missing email`); failCount++; continue; }
-          if (!program || !course || !section) { errors.push(`${rawName}: Missing PROGRAM, Subject Code or Section headers above`); failCount++; continue; }
+          if (!email) { errors.push(`${rawName || studentIdRaw}: Missing email`); failCount++; continue; }
+          if (!program || !course || !section) { errors.push(`${rawName || studentIdRaw}: Missing PROGRAM, Subject Code or Section headers above`); failCount++; continue; }
+
           const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-          if (!emailRegex.test(email)) { errors.push(`${rawName}: Invalid email format`); failCount++; continue; }
+          if (!emailRegex.test(email)) { errors.push(`${rawName || studentIdRaw}: Invalid email format`); failCount++; continue; }
+
+          if (studentIdRaw) {
+            if (!/^\d{2}-\d{4}$/.test(studentIdRaw)) { errors.push(`${rawName || studentIdRaw}: Invalid Student ID format (expected YY-NNNN)`); failCount++; continue; }
+            if (seenStudentIds.has(studentIdRaw)) { errors.push(`${rawName || studentIdRaw}: Duplicate Student ID in file`); failCount++; continue; }
+          }
+          if (seenEmails.has(email)) { errors.push(`${rawName || studentIdRaw}: Duplicate email in file`); failCount++; continue; }
+
+          // Track uniqueness within this import batch
+          seenEmails.add(email);
+          if (studentIdRaw) seenStudentIds.add(studentIdRaw);
 
           const result = await addStudentToClass({
             name: rawName,
             email,
             program,
             course,
-            section
+            section,
+            studentId: studentIdRaw || undefined
           });
-          if (result.success) { successCount++; } else { errors.push(`${rawName}: ${result.message}`); failCount++; }
+          if (result.success) { successCount++; } else { errors.push(`${rawName || studentIdRaw}: ${result.message}`); failCount++; }
         } catch (err: any) {
-          errors.push(`${r[0]}: ${err.message}`);
+          errors.push(`${rawName || studentIdRaw || '(unknown row)'}: ${err.message}`);
           failCount++;
         }
       }
@@ -2864,7 +2899,7 @@ export const StudentManagementPage: React.FC = () => {
                         className="h-4 w-4 rounded border-gray-300 text-gray-600 focus:ring-gray-500"
                       />
                     </td>
-                    <td className="px-4 py-3 font-medium">{student.id}</td>
+                    <td className="px-4 py-3 font-medium">{student.displayStudentId || student.studentId || student.id}</td>
                     <td className="px-4 py-3">{student.name}</td>
                     <td className="px-4 py-3">{student.email}</td>
                     <td className="px-4 py-3">
@@ -3832,7 +3867,8 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
   onClose,
 }) => {
   const { setStudents } = useDashboard();
-  const [formData, setFormData] = useState<Omit<Student, "id">>({
+  const [formData, setFormData] = useState<{ studentId: string; name: string; email: string; program: string; course: string; section: string }>({
+    studentId: "",
     name: "",
     email: "",
     program: "",
@@ -3877,9 +3913,16 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
 
   useEffect(() => {
     if (student && isOpen) {
-      setFormData(student);
+      setFormData({
+        studentId: student.displayStudentId || student.studentId || '',
+        name: student.name,
+        email: student.email,
+        program: student.program,
+        course: student.course,
+        section: student.section
+      });
     } else {
-      setFormData({ name: "", email: "", program: "", course: "", section: "" });
+      setFormData({ studentId: "", name: "", email: "", program: "", course: "", section: "" });
     }
   }, [student, isOpen]);
 
@@ -3950,7 +3993,17 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
 
       <form onSubmit={handleSubmit} className="grid gap-4 mt-6">
         <div>
-          <Label htmlFor="name">Name</Label>
+          <Label htmlFor="studentId">Student ID (e.g., 23-3289)</Label>
+          <Input
+            id="studentId"
+            value={formData.studentId}
+            onChange={handleChange}
+            placeholder="23-3289"
+            required
+          />
+        </div>
+        <div>
+          <Label htmlFor="name">Name (LAST, FIRST M.)</Label>
           <Input
             id="name"
             value={formData.name}
@@ -4260,6 +4313,8 @@ export const AdminLayout: React.FC = () => {
             // Map to the Student interface format
             const mappedStudents: Student[] = studentsData.map((s) => ({
               id: s.id,
+              studentId: s.studentId, // legacy internal id
+              displayStudentId: s.displayStudentId || s.studentId, // prefer actual institutional id
               name: s.name,
               email: s.email,
               program: s.program || "N/A",
@@ -4386,6 +4441,8 @@ export const AdminLayout: React.FC = () => {
 
       const mappedStudents: Student[] = studentsData.map((s) => ({
         id: s.id,
+        studentId: s.studentId,
+        displayStudentId: s.displayStudentId || s.studentId,
         name: s.name,
         email: s.email,
         program: s.program || "N/A",

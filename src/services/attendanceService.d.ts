@@ -9,6 +9,7 @@ export interface QRCodeData {
     sessionId: string;
     course: string;
     section: string;
+    deployedAt?: string;
 }
 export interface AttendanceRecord {
     studentId: string;
@@ -19,6 +20,7 @@ export interface AttendanceRecord {
     scannedAt: string;
     date: string;
     status: 'present' | 'late';
+    program: string;
     course: string;
     section: string;
     timestamp?: number;

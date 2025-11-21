@@ -26,6 +26,7 @@ export declare const getAttendanceStats: () => Promise<{
     absent: number;
 }>;
 export declare const addStudentToClass: (studentData: {
+    studentId?: string;
     name: string;
     email: string;
     program: string;
@@ -45,6 +46,7 @@ export declare const removeStudent: (studentId: string) => Promise<{
     message: any;
 }>;
 export declare const updateStudent: (studentId: string, studentData: {
+    studentId?: string;
     name: string;
     email: string;
     program: string;

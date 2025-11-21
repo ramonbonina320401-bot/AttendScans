@@ -64,7 +64,7 @@ export interface AttendanceRecord {
   time: string; // HH:MM AM/PM
   status: "PRESENT" | "LATE" | "ABSENT";
   program: string; // Program (e.g., BSIT, BSCS)
-  course: string; // Course code (e.g., IM101)
+  course: string; // Subject code (e.g., IM101)
   section: string; // Section identifier
   className?: string; // Optional class name for display
 }
@@ -1798,12 +1798,12 @@ export const GenerateQrPage: React.FC = () => {
                   <strong>📚 Step 1: Add Your Courses</strong>
                 </p>
                 <p className="text-sm text-blue-700">
-                  Before you can generate QR codes, you need to add at least one course with Program, Course Code, and Section.
+                  Before you can generate QR codes, you need to add at least one course with Program, Subject Code, and Section.
                 </p>
                 <ul className="list-disc list-inside text-sm text-blue-700 mt-2 space-y-1">
                   <li>Go to <strong>Settings → Courses</strong></li>
                   <li>Click "Add Course"</li>
-                  <li>Fill in Program (e.g., BSIT), Course Code (e.g., IM101), and Section (e.g., 1-4)</li>
+                  <li>Fill in Program (e.g., BSIT), Subject Code (e.g., IM101), and Section (e.g., 1-4)</li>
                 </ul>
               </div>
             )}
@@ -2661,6 +2661,32 @@ export const StudentManagementPage: React.FC = () => {
         return nameCell !== '' && !nameCell.includes('(Add more rows');
       });
 
+      // Check if the program/course/section from Excel exists in instructor's registered courses
+      const { auth, db } = await import('./firebase');
+      const { doc, getDoc } = await import('firebase/firestore');
+      const user = auth.currentUser;
+      let hasMatchingCourse = false;
+      
+      if (user) {
+        try {
+          const courseDoc = await getDoc(doc(db, 'instructorCourses', user.uid));
+          if (courseDoc.exists()) {
+            const registeredCourses = courseDoc.data().courseSections || [];
+            hasMatchingCourse = registeredCourses.some((cs: any) => 
+              cs.program === program && cs.course === course && cs.section === section
+            );
+          }
+        } catch (e) {
+          console.error('Error checking course registration:', e);
+        }
+      }
+
+      if (!hasMatchingCourse) {
+        alert(`⚠️ Course not registered!\n\nThe Program "${program}", Subject Code "${course}", and Section "${section}" from your Excel file are not registered in your Settings.\n\nPlease go to Settings and add this course combination before importing students.`);
+        setIsImporting(false);
+        return;
+      }
+
       const { addStudentToClass } = await import('./services/adminService');
       let successCount = 0;
       let failCount = 0;
@@ -3088,7 +3114,7 @@ export const StudentManagementPage: React.FC = () => {
                 />
               </div>
               <div>
-                <Label className="text-xs">Course Code</Label>
+                <Label className="text-xs">Subject Code</Label>
                 <Input
                   value={bulkEditData.course}
                   onChange={(e) =>
@@ -3254,7 +3280,7 @@ export const SettingsPage: React.FC = () => {
 
   const handleAddCourseSection = async () => {
     if (!newProgram.trim() || !newCourse.trim() || !newSection.trim()) {
-      alert("Please enter program, course code, and section");
+      alert("Please enter program, subject code, and section");
       return;
     }
 
@@ -3652,7 +3678,7 @@ export const SettingsPage: React.FC = () => {
                     className="md:col-span-1"
                   />
                   <Input
-                    placeholder="Course Code (e.g., IM101)"
+                    placeholder="Subject Code (e.g., IM101)"
                     value={newCourse}
                     onChange={(e) => setNewCourse(e.target.value)}
                     className="md:col-span-1"
@@ -4054,7 +4080,7 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
           )}
         </div>
         <div>
-          <Label htmlFor="course">Course Code</Label>
+          <Label htmlFor="course">Subject Code</Label>
           {isLoadingCourses ? (
             <Input value="Loading courses..." disabled />
           ) : courseSections.length > 0 ? (
@@ -4067,7 +4093,7 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
               }}
               required
             >
-              <option value="">Select a course code</option>
+              <option value="">Select a subject code</option>
               {/* Unique courses filtered by selected program (if any) */}
               {Array.from(
                 new Set(

@@ -150,6 +150,7 @@ export const getAttendanceStats = async () => {
 export const addStudentToClass = async (studentData: {
   name: string;
   email: string;
+  program: string;
   course: string;
   section: string;
 }) => {
@@ -165,6 +166,7 @@ export const addStudentToClass = async (studentData: {
       studentId,
       name: studentData.name,
       email: studentData.email.toLowerCase().trim(), // Normalize email
+      program: studentData.program,
       course: studentData.course,
       section: studentData.section,
       instructorId: user.uid,
@@ -190,7 +192,7 @@ export const removeStudent = async (studentId: string) => {
 };
 
 // Update student
-export const updateStudent = async (studentId: string, studentData: { name: string; email: string; course: string; section: string }) => {
+export const updateStudent = async (studentId: string, studentData: { name: string; email: string; program: string; course: string; section: string }) => {
   try {
     await updateDoc(doc(db, 'registeredStudents', studentId), {
       ...studentData,

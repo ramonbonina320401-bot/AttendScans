@@ -342,6 +342,24 @@ export default function Signup() {
         return;
       }
 
+      // Check for duplicate Student ID if signing up as student
+      if (selectedRole === "student") {
+        const { collection, query, where, getDocs } = await import('firebase/firestore');
+        const usersQuery = query(
+          collection(db, 'users'),
+          where('displayStudentId', '==', studentFormData.studentId.trim())
+        );
+        const existingStudents = await getDocs(usersQuery);
+        
+        if (!existingStudents.empty) {
+          setErrors(prev => ({ 
+            ...prev, 
+            studentId: "This Student ID is already registered. Please use a different Student ID or contact support." 
+          }));
+          return;
+        }
+      }
+
       console.log("Starting signup process for:", email);
 
       // Create user with Firebase
@@ -362,6 +380,7 @@ export default function Signup() {
             middleInitial: studentFormData.middleInitial,
             email: studentFormData.email,
             studentId: studentFormData.studentId,
+            displayStudentId: studentFormData.studentId, // Store for matching with registeredStudents
             createdAt: new Date().toISOString()
           }
         : { 

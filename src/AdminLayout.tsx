@@ -2582,11 +2582,11 @@ export const StudentManagementPage: React.FC = () => {
       rows.push(['Subject Code', headerCourse]);
       rows.push(['Section', headerSection]);
       rows.push([]); // blank separator
-      rows.push(['Student ID', 'Student Name', 'Email']);
+      rows.push(['Student ID', 'Student Name', 'Email (Optional)']);
       // Example entries
       rows.push(['23-3289', 'ABULENCIA, PETTER CAREY TALISAY', 'petter.carey@example.com']);
       rows.push(['23-3291', 'AGUS, JAMES TAHUM', 'james.tahum@example.com']);
-      rows.push(['(Add more rows below)', '(LAST, FIRST M.)', '(email@example.com)']);
+      rows.push(['(Add more rows below)', '(LAST, FIRST M.)', '(optional)']);
 
       const worksheet = XLSX.utils.aoa_to_sheet(rows);
       worksheet['!cols'] = [
@@ -2598,7 +2598,7 @@ export const StudentManagementPage: React.FC = () => {
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, 'Students');
       XLSX.writeFile(workbook, 'Student_Import_Template.xlsx');
-      alert('📥 Template downloaded!\n\nFormat: \nRow 1: PROGRAM | <program>\nRow 2: Subject Code | <subject code>\nRow 3: Section | <section>\nRow 5 onward: Student ID | Student Name (LAST, FIRST M.) | Email.');
+      alert('📥 Template downloaded!\n\nFormat: \nRow 1: PROGRAM | <program>\nRow 2: Subject Code | <subject code>\nRow 3: Section | <section>\nRow 5 onward: Student ID (YY-NNNN) | Student Name (LAST, FIRST M.) | Email (optional).');
     } catch (error) {
       console.error('Error creating template:', error);
       alert('Failed to download template. Please try again.');
@@ -2700,24 +2700,29 @@ export const StudentManagementPage: React.FC = () => {
         try {
           studentIdRaw = usingLegacy ? '' : (r[0] || '').toString().trim();
           rawName = usingLegacy ? (r[0] || '').toString().trim() : (r[1] || '').toString().trim();
-          const email = (usingLegacy ? (r[1] || '') : (r[2] || '')).toString().trim().toLowerCase();
+          let email = (usingLegacy ? (r[1] || '') : (r[2] || '')).toString().trim().toLowerCase();
 
           if (!rawName) { continue; }
-          if (!email) { errors.push(`${rawName || studentIdRaw}: Missing email`); failCount++; continue; }
-          if (!program || !course || !section) { errors.push(`${rawName || studentIdRaw}: Missing PROGRAM, Subject Code or Section headers above`); failCount++; continue; }
+          
+          // Student ID is now REQUIRED (not email)
+          if (!studentIdRaw) { errors.push(`${rawName}: Missing Student ID`); failCount++; continue; }
+          if (!/^\d{2}-\d{4}$/.test(studentIdRaw)) { errors.push(`${rawName} (${studentIdRaw}): Invalid Student ID format (expected YY-NNNN)`); failCount++; continue; }
+          if (seenStudentIds.has(studentIdRaw)) { errors.push(`${rawName} (${studentIdRaw}): Duplicate Student ID in file`); failCount++; continue; }
+          
+          if (!program || !course || !section) { errors.push(`${rawName} (${studentIdRaw}): Missing PROGRAM, Subject Code or Section headers above`); failCount++; continue; }
 
-          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-          if (!emailRegex.test(email)) { errors.push(`${rawName || studentIdRaw}: Invalid email format`); failCount++; continue; }
-
-          if (studentIdRaw) {
-            if (!/^\d{2}-\d{4}$/.test(studentIdRaw)) { errors.push(`${rawName || studentIdRaw}: Invalid Student ID format (expected YY-NNNN)`); failCount++; continue; }
-            if (seenStudentIds.has(studentIdRaw)) { errors.push(`${rawName || studentIdRaw}: Duplicate Student ID in file`); failCount++; continue; }
+          // Email is optional - generate placeholder if not provided
+          if (!email) {
+            email = `${studentIdRaw.replace('-', '')}@placeholder.local`;
+          } else {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email)) { errors.push(`${rawName} (${studentIdRaw}): Invalid email format`); failCount++; continue; }
+            if (seenEmails.has(email)) { errors.push(`${rawName} (${studentIdRaw}): Duplicate email in file`); failCount++; continue; }
           }
-          if (seenEmails.has(email)) { errors.push(`${rawName || studentIdRaw}: Duplicate email in file`); failCount++; continue; }
 
           // Track uniqueness within this import batch
           seenEmails.add(email);
-          if (studentIdRaw) seenStudentIds.add(studentIdRaw);
+          seenStudentIds.add(studentIdRaw);
 
           const result = await addStudentToClass({
             name: rawName,
@@ -2725,7 +2730,7 @@ export const StudentManagementPage: React.FC = () => {
             program,
             course,
             section,
-            studentId: studentIdRaw || undefined
+            studentId: studentIdRaw
           });
           if (result.success) { successCount++; } else { errors.push(`${rawName || studentIdRaw}: ${result.message}`); failCount++; }
         } catch (err: any) {

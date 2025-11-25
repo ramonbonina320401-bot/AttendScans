@@ -125,20 +125,20 @@ export const markAttendance = async (qrData: QRCodeData): Promise<{ success: boo
     }
     console.log('[ATTENDANCE] Step 7: Student profile complete, studentId:', userData.studentId);
 
-    // Verify student email is registered in the instructor's student list
-    const studentEmail = user.email?.toLowerCase().trim();
-    if (!studentEmail) {
-      console.log('[ATTENDANCE] Error: No email on account');
-      return { success: false, message: "No email associated with your account" };
+    // Verify student displayStudentId is registered in the instructor's student list
+    const studentDisplayId = userData.displayStudentId?.trim();
+    if (!studentDisplayId) {
+      console.log('[ATTENDANCE] Error: No displayStudentId on account');
+      return { success: false, message: "No Student ID associated with your account. Please contact administrator." };
     }
-    console.log('[ATTENDANCE] Step 8: Student email:', studentEmail);
+    console.log('[ATTENDANCE] Step 8: Student displayStudentId:', studentDisplayId);
 
-    // Check if this student's email is registered under the instructor
-    // Query only by email (students can only read their own records)
-    console.log('[ATTENDANCE] Step 9: Preparing to query registeredStudents by email');
+    // Check if this student's displayStudentId is registered under the instructor
+    // Query by displayStudentId (students can only read their own records)
+    console.log('[ATTENDANCE] Step 9: Preparing to query registeredStudents by displayStudentId');
     const registeredStudentsQuery = query(
       collection(db, 'registeredStudents'),
-      where('email', '==', studentEmail)
+      where('displayStudentId', '==', studentDisplayId)
     );
     console.log('[ATTENDANCE] Step 10: Executing registeredStudents query...');
     const registeredStudentsSnapshot = await getDocs(registeredStudentsQuery);
@@ -148,7 +148,7 @@ export const markAttendance = async (qrData: QRCodeData): Promise<{ success: boo
       console.log('[ATTENDANCE] Error: No registration records found');
       return { 
         success: false, 
-        message: "You are not registered in this instructor's student list. Please contact your instructor to add your email to the system." 
+        message: "You are not registered in this instructor's student list. Please contact your instructor to add your Student ID to the system." 
       };
     }
 

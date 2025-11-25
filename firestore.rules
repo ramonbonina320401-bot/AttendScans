@@ -36,10 +36,10 @@ service cloud.firestore {
     
     // Registered students (instructor's student list)
     match /registeredStudents/{studentId} {
-      // Instructors can read their students OR students can read their own record
+      // Instructors can read their students OR students can read their own record by displayStudentId
       allow read: if request.auth != null && (
         resource.data.instructorId == request.auth.uid ||
-        (request.auth.token.email != null && request.auth.token.email.lower() == resource.data.email.lower())
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.displayStudentId == resource.data.displayStudentId)
       );
       // Instructors can create/update/delete their own students
       allow create: if request.auth != null && request.resource.data.instructorId == request.auth.uid;

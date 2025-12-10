@@ -6,8 +6,14 @@ import React, {
   useEffect,
   useRef,
 } from "react";
-import ReactDOM from "react-dom"; // FIXED: Added missing import for ReactDOM
-import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
+import { createPortal } from "react-dom";
+import {
+  Link,
+  NavLink,
+  Outlet,
+  useNavigate,
+  useLocation,
+} from "react-router-dom";
 import QRCode from "qrcode";
 import { auth } from "./firebase";
 import { signOut } from "firebase/auth";
@@ -37,6 +43,7 @@ import {
   FiRefreshCw,
   FiAlertTriangle,
   FiArrowUp,
+  FiBookOpen,
 } from "react-icons/fi";
 import { FaQrcode } from "react-icons/fa";
 import { GuidedTour } from "./components/GuidedTour";
@@ -46,14 +53,14 @@ import { HelpTooltip } from "./components/HelpTooltip";
 
 // --- TYPE DEFINITIONS ---
 export interface Student {
-  id: string;              // Firestore document id
-  studentId?: string;      // Internal generated id (legacy) – not displayed
+  id: string; // Firestore document id
+  studentId?: string; // Internal generated id (legacy) – not displayed
   displayStudentId?: string; // Actual institutional ID (e.g., 23-3289)
   name: string;
   email: string;
-  program: string;  // e.g., "BSIT", "BSCS"
-  course: string;   // e.g., "IM101", "CS201"
-  section: string;  // e.g., "1-4", "A"
+  program: string; // e.g., "BSIT", "BSCS"
+  course: string; // e.g., "IM101", "CS201"
+  section: string; // e.g., "1-4", "A"
 }
 
 export interface AttendanceRecord {
@@ -96,12 +103,13 @@ const useDashboard = () => {
 // --- NAVIGATION ITEMS ---
 interface NavItem {
   label: string;
-  icon: React.ElementType; // Use ElementType for the component itself
+  icon: React.ElementType;
   to: string;
 }
 const navItems: NavItem[] = [
-  // --- Icons restored ---
   { label: "Dashboard", icon: FiHome, to: "/dashboard" },
+  // ADD THIS LINE BELOW:
+  { label: "Courses", icon: FiBookOpen, to: "/dashboard/courses" },
   { label: "Generate QR Code", icon: FaQrcode, to: "/dashboard/generate-qr" },
   { label: "Attendance Records", icon: FiFileText, to: "/dashboard/records" },
   { label: "Student Management", icon: FiUsers, to: "/dashboard/students" },
@@ -286,7 +294,7 @@ const Portal: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   }, []);
 
   // Renders children into the body only on the client-side
-  return mounted ? ReactDOM.createPortal(children, document.body) : null;
+  return mounted ? createPortal(children, document.body) : null;
 };
 
 // Custom Dropdown (for action menus) - Modified to use Portal
@@ -479,13 +487,19 @@ TabsContent.displayName = "TabsContent";
 
 // --- LAYOUT COMPONENTS (Sidebar, Topbar) ---
 
-const Topbar: React.FC<{ 
-  onMenuClick: () => void; 
+const Topbar: React.FC<{
+  onMenuClick: () => void;
   onReplayTour?: () => void;
   instructorLastName?: string;
   instructorInitial?: string;
-}> = ({ onMenuClick, onReplayTour, instructorLastName = "Instructor", instructorInitial = "I" }) => {
+}> = ({
+  onMenuClick,
+  onReplayTour,
+  instructorLastName = "Instructor",
+  instructorInitial = "I",
+}) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -530,7 +544,9 @@ const Topbar: React.FC<{
     ];
 
     const handleActivity = () => resetTimer();
-    activityEvents.forEach((evt) => document.addEventListener(evt, handleActivity));
+    activityEvents.forEach((evt) =>
+      document.addEventListener(evt, handleActivity)
+    );
     resetTimer();
 
     return () => {
@@ -758,156 +774,168 @@ const Topbar: React.FC<{
               <span className="sr-only">View notifications</span>
             </Button>
 
-            {showNotifications && (() => {
-              const today = new Date().toISOString().split('T')[0];
-              const todayRecords = recentAttendance.filter(r => r.date === today);
-              const earlierRecords = recentAttendance.filter(r => r.date !== today);
-              const hasAnyRecords = recentAttendance.length > 0;
-              
-              return (
-              <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-white rounded-md shadow-lg border border-gray-200 max-h-[32rem] overflow-y-auto z-50">
-                {/* Today's Attendance Section */}
-                <div className="p-3 border-b border-gray-200 bg-gray-50">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-gray-900">
-                      📅 Today's Attendance
-                    </h3>
-                    <span className="text-xs text-gray-500">
-                      {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                    </span>
-                  </div>
-                </div>
+            {showNotifications &&
+              (() => {
+                const today = new Date().toISOString().split("T")[0];
+                const todayRecords = recentAttendance.filter(
+                  (r) => r.date === today
+                );
+                const earlierRecords = recentAttendance.filter(
+                  (r) => r.date !== today
+                );
+                const hasAnyRecords = recentAttendance.length > 0;
 
-                <div className="divide-y divide-gray-100">
-                  {todayRecords.length > 0 ? (
-                    todayRecords.map((record, index) => (
-                      <div
-                        key={`notification-${record.id}-${index}`}
-                        className="p-3 hover:bg-gray-50 cursor-pointer transition-colors"
-                      >
-                        <div className="flex items-start space-x-3">
-                          <div className="flex-shrink-0">
-                            <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
-                              <FiUsers className="w-5 h-5 text-green-600" />
-                            </div>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-900">
-                              {record.name}
-                            </p>
-                            <p className="text-xs text-gray-500 mt-0.5">
-                              {record.course} - Section {record.section}
-                            </p>
-                            {record.className && (
-                              <p className="text-xs text-gray-600 mt-1">
-                                {record.className}
-                              </p>
-                            )}
-                            <p className="text-xs text-gray-400 mt-1">
-                              {record.time} - {record.date}
-                            </p>
-                          </div>
-                          <div className="flex-shrink-0">
-                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                              {record.status}
-                            </span>
-                          </div>
-                        </div>
+                return (
+                  <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-white rounded-md shadow-lg border border-gray-200 max-h-[32rem] overflow-y-auto z-50">
+                    {/* Today's Attendance Section */}
+                    <div className="p-3 border-b border-gray-200 bg-gray-50">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-semibold text-gray-900">
+                          📅 Today's Attendance
+                        </h3>
+                        <span className="text-xs text-gray-500">
+                          {new Date().toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                          })}
+                        </span>
                       </div>
-                    ))
-                  ) : (
-                    <div className="p-6 text-center">
-                      <FiBell className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-                      <p className="text-sm font-medium text-gray-900">
-                        No attendance today
-                      </p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Today's scans will appear here
-                      </p>
                     </div>
-                  )}
-                </div>
 
-                {/* Earlier This Week Section */}
-                {earlierRecords.length > 0 && (
-                  <>
-                    <div className="p-2 bg-gray-100 border-t border-gray-200">
-                      <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
-                        📋 Earlier This Week
-                      </h4>
-                    </div>
-                    <div className="divide-y divide-gray-100 max-h-48 overflow-y-auto">
-                      {earlierRecords.slice(0, 5).map((record, index) => (
-                        <div
-                          key={`earlier-${record.id}-${index}`}
-                          className="p-3 hover:bg-gray-50 cursor-pointer transition-colors"
-                        >
-                          <div className="flex items-start space-x-3">
-                            <div className="flex-shrink-0">
-                              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                                <FiUsers className="w-5 h-5 text-blue-600" />
+                    <div className="divide-y divide-gray-100">
+                      {todayRecords.length > 0 ? (
+                        todayRecords.map((record, index) => (
+                          <div
+                            key={`notification-${record.id}-${index}`}
+                            className="p-3 hover:bg-gray-50 cursor-pointer transition-colors"
+                          >
+                            <div className="flex items-start space-x-3">
+                              <div className="flex-shrink-0">
+                                <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                                  <FiUsers className="w-5 h-5 text-green-600" />
+                                </div>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-900">
+                                  {record.name}
+                                </p>
+                                <p className="text-xs text-gray-500 mt-0.5">
+                                  {record.course} - Section {record.section}
+                                </p>
+                                {record.className && (
+                                  <p className="text-xs text-gray-600 mt-1">
+                                    {record.className}
+                                  </p>
+                                )}
+                                <p className="text-xs text-gray-400 mt-1">
+                                  {record.time} - {record.date}
+                                </p>
+                              </div>
+                              <div className="flex-shrink-0">
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                  {record.status}
+                                </span>
                               </div>
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-gray-900">
-                                {record.name}
-                              </p>
-                              <p className="text-xs text-gray-500 mt-0.5">
-                                {record.course} - Section {record.section}
-                              </p>
-                              {record.className && (
-                                <p className="text-xs text-gray-600 mt-1">
-                                  {record.className}
-                                </p>
-                              )}
-                              <p className="text-xs text-gray-400 mt-1">
-                                {record.time} - {record.date}
-                              </p>
-                            </div>
-                            <div className="flex-shrink-0">
-                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                                record.status === 'PRESENT' ? 'bg-green-100 text-green-800' :
-                                record.status === 'LATE' ? 'bg-yellow-100 text-yellow-800' :
-                                'bg-red-100 text-red-800'
-                              }`}>
-                                {record.status}
-                              </span>
-                            </div>
                           </div>
+                        ))
+                      ) : (
+                        <div className="p-6 text-center">
+                          <FiBell className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                          <p className="text-sm font-medium text-gray-900">
+                            No attendance today
+                          </p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Today's scans will appear here
+                          </p>
                         </div>
-                      ))}
+                      )}
                     </div>
-                  </>
-                )}
 
-                {!hasAnyRecords && (
-                  <div className="p-8 text-center">
-                    <FiBell className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                    <p className="text-sm font-medium text-gray-900">
-                      No recent attendance
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      New attendance scans will appear here
-                    </p>
-                  </div>
-                )}
+                    {/* Earlier This Week Section */}
+                    {earlierRecords.length > 0 && (
+                      <>
+                        <div className="p-2 bg-gray-100 border-t border-gray-200">
+                          <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                            📋 Earlier This Week
+                          </h4>
+                        </div>
+                        <div className="divide-y divide-gray-100 max-h-48 overflow-y-auto">
+                          {earlierRecords.slice(0, 5).map((record, index) => (
+                            <div
+                              key={`earlier-${record.id}-${index}`}
+                              className="p-3 hover:bg-gray-50 cursor-pointer transition-colors"
+                            >
+                              <div className="flex items-start space-x-3">
+                                <div className="flex-shrink-0">
+                                  <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                                    <FiUsers className="w-5 h-5 text-blue-600" />
+                                  </div>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-gray-900">
+                                    {record.name}
+                                  </p>
+                                  <p className="text-xs text-gray-500 mt-0.5">
+                                    {record.course} - Section {record.section}
+                                  </p>
+                                  {record.className && (
+                                    <p className="text-xs text-gray-600 mt-1">
+                                      {record.className}
+                                    </p>
+                                  )}
+                                  <p className="text-xs text-gray-400 mt-1">
+                                    {record.time} - {record.date}
+                                  </p>
+                                </div>
+                                <div className="flex-shrink-0">
+                                  <span
+                                    className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                      record.status === "PRESENT"
+                                        ? "bg-green-100 text-green-800"
+                                        : record.status === "LATE"
+                                        ? "bg-yellow-100 text-yellow-800"
+                                        : "bg-red-100 text-red-800"
+                                    }`}
+                                  >
+                                    {record.status}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
 
-                {hasAnyRecords && (
-                  <div className="p-3 border-t border-gray-200 bg-gray-50">
-                    <button
-                      onClick={() => {
-                        setShowNotifications(false);
-                        navigate('/dashboard/records');
-                      }}
-                      className="w-full text-center text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 py-2 px-4 rounded-md transition-colors cursor-pointer"
-                    >
-                      📊 View All Attendance Records
-                    </button>
+                    {!hasAnyRecords && (
+                      <div className="p-8 text-center">
+                        <FiBell className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                        <p className="text-sm font-medium text-gray-900">
+                          No recent attendance
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          New attendance scans will appear here
+                        </p>
+                      </div>
+                    )}
+
+                    {hasAnyRecords && (
+                      <div className="p-3 border-t border-gray-200 bg-gray-50">
+                        <button
+                          onClick={() => {
+                            setShowNotifications(false);
+                            navigate("/dashboard/records");
+                          }}
+                          className="w-full text-center text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 py-2 px-4 rounded-md transition-colors cursor-pointer"
+                        >
+                          📊 View All Attendance Records
+                        </button>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-              );
-            })()}
+                );
+              })()}
           </div>
           <div className="relative" ref={dropdownRef}>
             <button
@@ -1028,17 +1056,17 @@ const Sidebar: React.FC = () => {
       </div>
       <nav className="flex-1 p-4 space-y-2">
         {navItems.map((item) => {
-          const Icon = item.icon as React.ElementType; // Assert type now
+          const Icon = item.icon as React.ElementType;
+          // ... tour attributes logic ...
           const tourAttr =
             item.label === "Generate QR Code"
               ? "nav-generate-qr"
               : item.label === "Settings"
               ? "nav-settings"
-              : item.label === "Attendance Records"
-              ? "nav-records"
-              : item.label === "Student Management"
-              ? "nav-students"
+              : item.label === "Courses"
+              ? "nav-courses" // Add tour tag for courses
               : undefined;
+
           return (
             <NavLink
               key={item.to}
@@ -1050,12 +1078,12 @@ const Sidebar: React.FC = () => {
               }
               data-tour={tourAttr}
             >
-              {/* --- RENDER ICON CORRECTLY --- */}
               <Icon className="w-5 h-5 mr-3 flex-shrink-0" />
               <span>{item.label}</span>
             </NavLink>
           );
         })}
+        {/* REMOVED THE EXTRA COURSES NAVLINK HERE AS IT IS NOW IN THE MAIN LIST */}
       </nav>
     </aside>
   );
@@ -1179,13 +1207,13 @@ export const DashboardPage: React.FC = () => {
 
   useEffect(() => {
     // Calculate today's stats from actual today's records
-    const today = new Date().toISOString().split('T')[0];
-    const todayRecords = records.filter(r => r.date === today);
-    
-    const present = todayRecords.filter(r => r.status === 'PRESENT').length;
-    const late = todayRecords.filter(r => r.status === 'LATE').length;
-    const absent = todayRecords.filter(r => r.status === 'ABSENT').length;
-    
+    const today = new Date().toISOString().split("T")[0];
+    const todayRecords = records.filter((r) => r.date === today);
+
+    const present = todayRecords.filter((r) => r.status === "PRESENT").length;
+    const late = todayRecords.filter((r) => r.status === "LATE").length;
+    const absent = todayRecords.filter((r) => r.status === "ABSENT").length;
+
     setTodayStats({ present, late, absent });
   }, [records]);
 
@@ -1221,8 +1249,14 @@ export const DashboardPage: React.FC = () => {
               title="PRESENT TODAY"
               value={todayStats.present}
               percentage={
-                (todayStats.present + todayStats.late + todayStats.absent) > 0
-                  ? Math.round((todayStats.present / (todayStats.present + todayStats.late + todayStats.absent)) * 100)
+                todayStats.present + todayStats.late + todayStats.absent > 0
+                  ? Math.round(
+                      (todayStats.present /
+                        (todayStats.present +
+                          todayStats.late +
+                          todayStats.absent)) *
+                        100
+                    )
                   : 0
               }
               description="On time today"
@@ -1231,8 +1265,14 @@ export const DashboardPage: React.FC = () => {
               title="LATE TODAY"
               value={todayStats.late}
               percentage={
-                (todayStats.present + todayStats.late + todayStats.absent) > 0
-                  ? Math.round((todayStats.late / (todayStats.present + todayStats.late + todayStats.absent)) * 100)
+                todayStats.present + todayStats.late + todayStats.absent > 0
+                  ? Math.round(
+                      (todayStats.late /
+                        (todayStats.present +
+                          todayStats.late +
+                          todayStats.absent)) *
+                        100
+                    )
                   : 0
               }
               description="Arrived late today"
@@ -1241,8 +1281,14 @@ export const DashboardPage: React.FC = () => {
               title="ABSENT TODAY"
               value={todayStats.absent}
               percentage={
-                (todayStats.present + todayStats.late + todayStats.absent) > 0
-                  ? Math.round((todayStats.absent / (todayStats.present + todayStats.late + todayStats.absent)) * 100)
+                todayStats.present + todayStats.late + todayStats.absent > 0
+                  ? Math.round(
+                      (todayStats.absent /
+                        (todayStats.present +
+                          todayStats.late +
+                          todayStats.absent)) *
+                        100
+                    )
                   : 0
               }
               description="No scan today"
@@ -1268,6 +1314,30 @@ export const DashboardPage: React.FC = () => {
               View Attendance Records
             </Button>
           </Link>
+        </CardContent>
+      </Card>
+
+      {/* Courses Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Courses</CardTitle>
+          <CardDescription>
+            Manage your program / course / section list
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-gray-600 mb-4">
+            Add or review courses and sections used when generating QR codes and
+            enrolling students.
+          </p>
+          <div className="flex gap-3">
+            {/* UPDATED LINK: Now points to /dashboard/courses */}
+            <Link to="/dashboard/courses" className="flex-1">
+              <Button variant="outline" className="w-full">
+                Manage Courses
+              </Button>
+            </Link>
+          </div>
         </CardContent>
       </Card>
     </div>
@@ -1324,7 +1394,9 @@ export const GenerateQrPage: React.FC = () => {
   const [isLoadingCourses, setIsLoadingCourses] = useState(true);
   const [lateThreshold, setLateThreshold] = useState<number>(15); // Grace period in minutes
   const [showSetupModal, setShowSetupModal] = useState(false);
-  const [setupStep, setSetupStep] = useState<"courses" | "students" | null>(null);
+  const [setupStep, setSetupStep] = useState<"courses" | "students" | null>(
+    null
+  );
   const [remainingSeconds, setRemainingSeconds] = useState<number>(0);
 
   // Countdown for QR validity (expiry)
@@ -1377,7 +1449,7 @@ export const GenerateQrPage: React.FC = () => {
           const settingsDoc = await getDoc(doc(db, "settings", user.uid));
           if (settingsDoc.exists()) {
             const settingsData = settingsDoc.data();
-            if (typeof settingsData.lateThreshold === 'number') {
+            if (typeof settingsData.lateThreshold === "number") {
               setLateThreshold(settingsData.lateThreshold);
             }
           }
@@ -1427,7 +1499,7 @@ export const GenerateQrPage: React.FC = () => {
       const course = match ? match[1].trim() : selectedCourseSection;
       const section = match ? match[2].trim() : "A";
 
-  // Combine course-section and topic for the full class identifier
+      // Combine course-section and topic for the full class identifier
       const fullClassName = `${selectedCourseSection} - ${className}`;
 
       // Generate QR code data with course and section
@@ -1490,7 +1562,7 @@ export const GenerateQrPage: React.FC = () => {
       const course = match ? match[1].trim() : selectedCourseSection;
       const section = match ? match[2].trim() : "A";
 
-  // Combine course-section and topic
+      // Combine course-section and topic
       const fullClassName = `${selectedCourseSection} - ${className}`;
       const qrData = await generateQRCodeData(
         fullClassName,
@@ -1498,12 +1570,15 @@ export const GenerateQrPage: React.FC = () => {
         course,
         section
       );
-      
+
       // Add deployedAt timestamp to QR data for late calculation
       const deployedAtTime = new Date().toISOString();
       const qrDataWithDeployment = { ...qrData, deployedAt: deployedAtTime };
-      
-      console.log("Generated QR data with deployment time:", qrDataWithDeployment);
+
+      console.log(
+        "Generated QR data with deployment time:",
+        qrDataWithDeployment
+      );
       setSessionData(qrDataWithDeployment);
 
       // Generate QR code image with deployedAt included
@@ -1698,7 +1773,13 @@ export const GenerateQrPage: React.FC = () => {
                       </div>
                       <div>
                         <p className="text-xs text-gray-500 mb-1">Expires In</p>
-                        <p className={`font-semibold ${remainingSeconds === 0 ? "text-red-600" : "text-gray-900"}`}>
+                        <p
+                          className={`font-semibold ${
+                            remainingSeconds === 0
+                              ? "text-red-600"
+                              : "text-gray-900"
+                          }`}
+                        >
                           {formatCountdown(remainingSeconds)}
                         </p>
                       </div>
@@ -1784,7 +1865,9 @@ export const GenerateQrPage: React.FC = () => {
               </div>
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">
-                  {setupStep === "courses" ? "Add Courses First" : "Add Students First"}
+                  {setupStep === "courses"
+                    ? "Add Courses First"
+                    : "Add Students First"}
                 </h3>
                 <p className="text-sm text-gray-500">
                   You need to complete setup before generating QR codes
@@ -1798,12 +1881,18 @@ export const GenerateQrPage: React.FC = () => {
                   <strong>📚 Step 1: Add Your Courses</strong>
                 </p>
                 <p className="text-sm text-blue-700">
-                  Before you can generate QR codes, you need to add at least one course with Program, Subject Code, and Section.
+                  Before you can generate QR codes, you need to add at least one
+                  course with Program, Subject Code, and Section.
                 </p>
                 <ul className="list-disc list-inside text-sm text-blue-700 mt-2 space-y-1">
-                  <li>Go to <strong>Settings → Courses</strong></li>
+                  <li>
+                    Go to <strong>Settings → Courses</strong>
+                  </li>
                   <li>Click "Add Course"</li>
-                  <li>Fill in Program (e.g., BSIT), Subject Code (e.g., IM101), and Section (e.g., 1-4)</li>
+                  <li>
+                    Fill in Program (e.g., BSIT), Subject Code (e.g., IM101),
+                    and Section (e.g., 1-4)
+                  </li>
                 </ul>
               </div>
             )}
@@ -1814,12 +1903,17 @@ export const GenerateQrPage: React.FC = () => {
                   <strong>👥 Step 2: Add Your Students</strong>
                 </p>
                 <p className="text-sm text-green-700">
-                  You have courses set up! Now add students who will scan the QR codes.
+                  You have courses set up! Now add students who will scan the QR
+                  codes.
                 </p>
                 <ul className="list-disc list-inside text-sm text-green-700 mt-2 space-y-1">
-                  <li>Go to <strong>Student Management</strong></li>
+                  <li>
+                    Go to <strong>Student Management</strong>
+                  </li>
                   <li>Click "Add Student" or "Import Excel"</li>
-                  <li>Students must match your course/section to mark attendance</li>
+                  <li>
+                    Students must match your course/section to mark attendance
+                  </li>
                 </ul>
               </div>
             )}
@@ -1843,7 +1937,9 @@ export const GenerateQrPage: React.FC = () => {
                   }
                 }}
               >
-                {setupStep === "courses" ? "Go to Settings" : "Go to Student Management"}
+                {setupStep === "courses"
+                  ? "Go to Settings"
+                  : "Go to Student Management"}
               </Button>
             </div>
           </div>
@@ -1851,13 +1947,12 @@ export const GenerateQrPage: React.FC = () => {
       </>
     );
   }
-
   // Normal View - Configuration & Preview
   return (
     <Card className="max-w-2xl mx-auto">
       <CardHeader className="text-center">
         <FaQrcode className="mx-auto h-12 w-12 text-gray-700" />
-  <CardTitle className="text-2xl pt-2">Attendance QR Code</CardTitle>
+        <CardTitle className="text-2xl pt-2">Attendance QR Code</CardTitle>
         <CardDescription>
           Configure and deploy your attendance QR code
         </CardDescription>
@@ -1908,7 +2003,9 @@ export const GenerateQrPage: React.FC = () => {
               >
                 {courseSections.map((cs) => {
                   const value = `${cs.course} - Section ${cs.section}`;
-                  const label = `${cs.program || 'N/A'} → ${cs.course} → Section ${cs.section}`;
+                  const label = `${cs.program || "N/A"} → ${
+                    cs.course
+                  } → Section ${cs.section}`;
                   return (
                     <option key={value} value={value}>
                       {label}
@@ -1936,33 +2033,23 @@ export const GenerateQrPage: React.FC = () => {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="duration-input">Duration</Label>
-            {/* QR Code validity duration */}
-            <CustomSelect
-              id="duration-input"
-              value={duration.toString()}
-              onChange={(e) => setDuration(Number(e.target.value))}
-              className="w-full"
-            >
-              <option value="120">2 hours</option>
-              <option value="180">3 hours</option>
-              <option value="300">5 hours</option>
-            </CustomSelect>
-          </div>
-          <div className="space-y-1" data-tour="grace-period">
-            <Label className="inline-flex items-center">
-              Grace Period (Late Threshold)
-              <HelpTooltip
-                term="Grace Period"
-                definition="The time window students have to scan after class starts and still be marked 'present'. This is set in Settings → General. Students scanning after this window are marked 'late'."
+            <div className="space-y-1" data-tour="grace-period">
+              <Label className="inline-flex items-center">
+                Grace Period (Late Threshold)
+                <HelpTooltip
+                  term="Grace Period"
+                  definition="The time window students have to scan after class starts and still be marked 'present'. This is set in Settings → General. Students scanning after this window are marked 'late'."
+                />
+              </Label>
+              <Input
+                value={`${lateThreshold} minutes`}
+                disabled
+                className="w-full bg-gray-50 text-gray-700"
               />
-            </Label>
-            <Input
-              value={`${lateThreshold} minutes`}
-              disabled
-              className="w-full bg-gray-50 text-gray-700"
-            />
-            <p className="text-xs text-gray-500">Students scanning after {lateThreshold} minutes are marked late.</p>
+              <p className="text-xs text-gray-500">
+                Students scanning after {lateThreshold} minutes are marked late.
+              </p>
+            </div>
           </div>
         </div>
 
@@ -2010,7 +2097,7 @@ export const GenerateQrPage: React.FC = () => {
 
         {/* Info Card */}
         <div className="w-full bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <p className="text-xs text-blue-800">
+          <p className="text-xs text-blue-800 mb-3">
             <strong>💡 Tip:</strong> Click "Deploy QR Code" to show a large,
             full-screen QR code that students can easily scan. The validity
             timer starts when you deploy.
@@ -2139,7 +2226,8 @@ export const AttendanceRecordsPage: React.FC = () => {
 
       // Program filtering
       const programMatch =
-        selectedProgram === "All Programs" || record.program === selectedProgram;
+        selectedProgram === "All Programs" ||
+        record.program === selectedProgram;
 
       // Course filtering
       const courseMatch =
@@ -2165,7 +2253,14 @@ export const AttendanceRecordsPage: React.FC = () => {
     });
 
     return filtered;
-  }, [records, selectedDate, selectedProgram, selectedCourse, selectedSection, sortOrder]);
+  }, [
+    records,
+    selectedDate,
+    selectedProgram,
+    selectedCourse,
+    selectedSection,
+    sortOrder,
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -2195,8 +2290,12 @@ export const AttendanceRecordsPage: React.FC = () => {
           {selectedProgram !== "All Programs" && (
             <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-blue-700">Program:</span>
-                <span className="text-lg font-bold text-blue-900">{selectedProgram}</span>
+                <span className="text-sm font-semibold text-blue-700">
+                  Program:
+                </span>
+                <span className="text-lg font-bold text-blue-900">
+                  {selectedProgram}
+                </span>
               </div>
             </div>
           )}
@@ -2315,12 +2414,9 @@ export const AttendanceRecordsPage: React.FC = () => {
                       </td>
                       <td className="px-4 py-3">{record.name}</td>
                       <td className="px-4 py-3">
-                        <span className="inline-flex items-center gap-2">
-                          <span className="font-semibold text-blue-700">{record.program}</span>
-                          <span className="text-gray-400">→</span>
-                          <span className="font-medium">{record.course}</span>
-                          <span className="text-gray-400">→</span>
-                          <span className="text-gray-600">Section {record.section}</span>
+                        <span className="inline-flex items-center">
+                          {record.program || "N/A"} - {record.course} - Section{" "}
+                          {record.section}
                         </span>
                       </td>
                       <td className="px-4 py-3">{record.date}</td>
@@ -2422,8 +2518,13 @@ const StatusBadge: React.FC<{ status: AttendanceRecord["status"] }> = ({
  * 4. STUDENT MANAGEMENT PAGE
  */
 export const StudentManagementPage: React.FC = () => {
-  const { students, setStudents, openAddModal, openEditModal, openDeleteModal } =
-    useDashboard();
+  const {
+    students,
+    setStudents,
+    openAddModal,
+    openEditModal,
+    openDeleteModal,
+  } = useDashboard();
   const [searchQuery, setSearchQuery] = useState("");
   const [isImporting, setIsImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -2432,7 +2533,12 @@ export const StudentManagementPage: React.FC = () => {
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(" ");
   const [showBulkEditModal, setShowBulkEditModal] = useState(false);
-  const [bulkEditData, setBulkEditData] = useState({ program: "", course: "", section: "", email: "" });
+  const [bulkEditData, setBulkEditData] = useState({
+    program: "",
+    course: "",
+    section: "",
+    email: "",
+  });
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) =>
@@ -2464,9 +2570,7 @@ export const StudentManagementPage: React.FC = () => {
       await Promise.all(
         selectedIds.map((id) => deleteDoc(doc(db, "registeredStudents", id)))
       );
-      const { getRegisteredStudents } = await import(
-        "./services/adminService"
-      );
+      const { getRegisteredStudents } = await import("./services/adminService");
       const refreshed = await getRegisteredStudents();
       const mapped = refreshed.map((s) => ({
         id: s.id,
@@ -2498,18 +2602,20 @@ export const StudentManagementPage: React.FC = () => {
       const { doc, updateDoc } = await import("firebase/firestore");
       const tasks = selectedIds.map(async (id) => {
         const payload: any = {};
-        if (bulkEditData.program.trim()) payload.program = bulkEditData.program.trim();
-        if (bulkEditData.course.trim()) payload.course = bulkEditData.course.trim();
-        if (bulkEditData.section.trim()) payload.section = bulkEditData.section.trim();
-        if (bulkEditData.email.trim()) payload.email = bulkEditData.email.trim().toLowerCase();
+        if (bulkEditData.program.trim())
+          payload.program = bulkEditData.program.trim();
+        if (bulkEditData.course.trim())
+          payload.course = bulkEditData.course.trim();
+        if (bulkEditData.section.trim())
+          payload.section = bulkEditData.section.trim();
+        if (bulkEditData.email.trim())
+          payload.email = bulkEditData.email.trim().toLowerCase();
         if (Object.keys(payload).length > 0) {
           await updateDoc(doc(db, "registeredStudents", id), payload);
         }
       });
       await Promise.all(tasks);
-      const { getRegisteredStudents } = await import(
-        "./services/adminService"
-      );
+      const { getRegisteredStudents } = await import("./services/adminService");
       const refreshed = await getRegisteredStudents();
       const mapped = refreshed.map((s) => ({
         id: s.id,
@@ -2546,29 +2652,31 @@ export const StudentManagementPage: React.FC = () => {
 
   const handleDownloadTemplate = async () => {
     try {
-      const XLSX = await import('xlsx');
+      const XLSX = await import("xlsx");
 
       // Fetch first course section (program / course / section) for header, if available
-      let headerProgram = '';
-      let headerCourse = '';
-      let headerSection = '';
+      let headerProgram = "";
+      let headerCourse = "";
+      let headerSection = "";
       try {
-        const { auth, db } = await import('./firebase');
-        const { doc, getDoc } = await import('firebase/firestore');
+        const { auth, db } = await import("./firebase");
+        const { doc, getDoc } = await import("firebase/firestore");
         const user = auth.currentUser;
         if (user) {
-          const courseDoc = await getDoc(doc(db, 'instructorCourses', user.uid));
-            if (courseDoc.exists()) {
-              const list = courseDoc.data().courseSections || [];
-              if (Array.isArray(list) && list.length > 0) {
-                headerProgram = list[0].program || '';
-                headerCourse = list[0].course || '';
-                headerSection = list[0].section || '';
-              }
+          const courseDoc = await getDoc(
+            doc(db, "instructorCourses", user.uid)
+          );
+          if (courseDoc.exists()) {
+            const list = courseDoc.data().courseSections || [];
+            if (Array.isArray(list) && list.length > 0) {
+              headerProgram = list[0].program || "";
+              headerCourse = list[0].course || "";
+              headerSection = list[0].section || "";
             }
+          }
         }
       } catch (e) {
-        console.warn('Could not fetch courseSections for template header', e);
+        console.warn("Could not fetch courseSections for template header", e);
       }
 
       // Build rows manually for desired layout:
@@ -2578,30 +2686,36 @@ export const StudentManagementPage: React.FC = () => {
       // (blank)
       // Student ID | Student Name | Email
       const rows: any[][] = [];
-      rows.push(['PROGRAM', headerProgram]);
-      rows.push(['Subject Code', headerCourse]);
-      rows.push(['Section', headerSection]);
+      rows.push(["PROGRAM", headerProgram]);
+      rows.push(["Subject Code", headerCourse]);
+      rows.push(["Section", headerSection]);
       rows.push([]); // blank separator
-      rows.push(['Student ID', 'Student Name', 'Email (Optional)']);
+      rows.push(["Student ID", "Student Name", "Email (Optional)"]);
       // Example entries
-      rows.push(['23-3289', 'ABULENCIA, PETTER CAREY TALISAY', 'petter.carey@example.com']);
-      rows.push(['23-3291', 'AGUS, JAMES TAHUM', 'james.tahum@example.com']);
-      rows.push(['(Add more rows below)', '(LAST, FIRST M.)', '(optional)']);
+      rows.push([
+        "23-3289",
+        "ABULENCIA, PETTER CAREY TALISAY",
+        "petter.carey@example.com",
+      ]);
+      rows.push(["23-3291", "AGUS, JAMES TAHUM", "james.tahum@example.com"]);
+      rows.push(["(Add more rows below)", "(LAST, FIRST M.)", "(optional)"]);
 
       const worksheet = XLSX.utils.aoa_to_sheet(rows);
-      worksheet['!cols'] = [
+      worksheet["!cols"] = [
         { wch: 12 }, // Student ID
         { wch: 40 }, // Student Name
-        { wch: 30 }  // Email
+        { wch: 30 }, // Email
       ];
 
       const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Students');
-      XLSX.writeFile(workbook, 'Student_Import_Template.xlsx');
-      alert('📥 Template downloaded!\n\nFormat: \nRow 1: PROGRAM | <program>\nRow 2: Subject Code | <subject code>\nRow 3: Section | <section>\nRow 5 onward: Student ID (YY-NNNN) | Student Name (LAST, FIRST M.) | Email (optional).');
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Students");
+      XLSX.writeFile(workbook, "Student_Import_Template.xlsx");
+      alert(
+        "📥 Template downloaded!\n\nFormat: \nRow 1: PROGRAM | <program>\nRow 2: Subject Code | <subject code>\nRow 3: Section | <section>\nRow 5 onward: Student ID (YY-NNNN) | Student Name (LAST, FIRST M.) | Email (optional)."
+      );
     } catch (error) {
-      console.error('Error creating template:', error);
-      alert('Failed to download template. Please try again.');
+      console.error("Error creating template:", error);
+      alert("Failed to download template. Please try again.");
     }
   };
 
@@ -2613,81 +2727,105 @@ export const StudentManagementPage: React.FC = () => {
 
     try {
       // Dynamically import xlsx
-      const XLSX = await import('xlsx');
-      
+      const XLSX = await import("xlsx");
+
       // Read the file
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data);
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
       // Read raw rows (array of arrays) to support new template layout
-      const rows: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' }) as any[][];
+      const rows: any[][] = XLSX.utils.sheet_to_json(worksheet, {
+        header: 1,
+        defval: "",
+      }) as any[][];
 
       if (rows.length === 0) {
-        alert('The Excel file is empty. Please add student data and try again.');
+        alert(
+          "The Excel file is empty. Please add student data and try again."
+        );
         setIsImporting(false);
         return;
       }
 
       // Extract header metadata
-      const programRow = rows.find(r => r[0] && r[0].toString().toLowerCase() === 'program');
-      const subjectRow = rows.find(r => r[0] && r[0].toString().toLowerCase() === 'subject code');
-      const sectionRow = rows.find(r => r[0] && r[0].toString().toLowerCase() === 'section');
-      const program = programRow ? (programRow[1] || '').toString().trim() : '';
-      const course = subjectRow ? (subjectRow[1] || '').toString().trim() : ''; // map Subject Code -> course
-      const section = sectionRow ? (sectionRow[1] || '').toString().trim() : '';
+      const programRow = rows.find(
+        (r) => r[0] && r[0].toString().toLowerCase() === "program"
+      );
+      const subjectRow = rows.find(
+        (r) => r[0] && r[0].toString().toLowerCase() === "subject code"
+      );
+      const sectionRow = rows.find(
+        (r) => r[0] && r[0].toString().toLowerCase() === "section"
+      );
+      const program = programRow ? (programRow[1] || "").toString().trim() : "";
+      const course = subjectRow ? (subjectRow[1] || "").toString().trim() : ""; // map Subject Code -> course
+      const section = sectionRow ? (sectionRow[1] || "").toString().trim() : "";
 
       // Locate student header row supporting new & legacy formats
-      const studentHeaderIndexNew = rows.findIndex(r => {
-        const c0 = (r[0] || '').toString().toLowerCase().trim();
-        const c1 = (r[1] || '').toString().toLowerCase().trim();
-        return c0 === 'student id' && c1.startsWith('student name');
+      const studentHeaderIndexNew = rows.findIndex((r) => {
+        const c0 = (r[0] || "").toString().toLowerCase().trim();
+        const c1 = (r[1] || "").toString().toLowerCase().trim();
+        return c0 === "student id" && c1.startsWith("student name");
       });
       let studentHeaderIndex = studentHeaderIndexNew;
       let usingLegacy = false;
       if (studentHeaderIndex === -1) {
         // Legacy format: first column header was 'Student Name'
-        studentHeaderIndex = rows.findIndex(r => (r[0] || '').toString().toLowerCase().trim() === 'student name');
+        studentHeaderIndex = rows.findIndex(
+          (r) => (r[0] || "").toString().toLowerCase().trim() === "student name"
+        );
         if (studentHeaderIndex !== -1) usingLegacy = true;
       }
       if (studentHeaderIndex === -1) {
-        alert('Could not find student header row. Expected "Student ID | Student Name | Email" or legacy "Student Name | Email".');
+        alert(
+          'Could not find student header row. Expected "Student ID | Student Name | Email" or legacy "Student Name | Email".'
+        );
         setIsImporting(false);
         return;
       }
 
       // Slice student rows and filter out placeholder / blank rows
-      const studentRows = rows.slice(studentHeaderIndex + 1).filter(r => {
-        const nameCell = usingLegacy ? (r[0] || '').toString().trim() : (r[1] || '').toString().trim();
-        return nameCell !== '' && !nameCell.includes('(Add more rows');
+      const studentRows = rows.slice(studentHeaderIndex + 1).filter((r) => {
+        const nameCell = usingLegacy
+          ? (r[0] || "").toString().trim()
+          : (r[1] || "").toString().trim();
+        return nameCell !== "" && !nameCell.includes("(Add more rows");
       });
 
       // Check if the program/course/section from Excel exists in instructor's registered courses
-      const { auth, db } = await import('./firebase');
-      const { doc, getDoc } = await import('firebase/firestore');
+      const { auth, db } = await import("./firebase");
+      const { doc, getDoc } = await import("firebase/firestore");
       const user = auth.currentUser;
       let hasMatchingCourse = false;
-      
+
       if (user) {
         try {
-          const courseDoc = await getDoc(doc(db, 'instructorCourses', user.uid));
+          const courseDoc = await getDoc(
+            doc(db, "instructorCourses", user.uid)
+          );
           if (courseDoc.exists()) {
             const registeredCourses = courseDoc.data().courseSections || [];
-            hasMatchingCourse = registeredCourses.some((cs: any) => 
-              cs.program === program && cs.course === course && cs.section === section
+            hasMatchingCourse = registeredCourses.some(
+              (cs: any) =>
+                cs.program === program &&
+                cs.course === course &&
+                cs.section === section
             );
           }
         } catch (e) {
-          console.error('Error checking course registration:', e);
+          console.error("Error checking course registration:", e);
         }
       }
 
       if (!hasMatchingCourse) {
-        alert(`⚠️ Course not registered!\n\nThe Program "${program}", Subject Code "${course}", and Section "${section}" from your Excel file are not registered in your Settings.\n\nPlease go to Settings and add this course combination before importing students.`);
+        alert(
+          `⚠️ Course not registered!\n\nThe Program "${program}", Subject Code "${course}", and Section "${section}" from your Excel file are not registered in your Settings.\n\nPlease go to Settings and add this course combination before importing students.`
+        );
         setIsImporting(false);
         return;
       }
 
-      const { addStudentToClass } = await import('./services/adminService');
+      const { addStudentToClass } = await import("./services/adminService");
       let successCount = 0;
       let failCount = 0;
       const errors: string[] = [];
@@ -2695,29 +2833,68 @@ export const StudentManagementPage: React.FC = () => {
       const seenStudentIds = new Set<string>();
 
       for (const r of studentRows) {
-        let rawName = '';
-        let studentIdRaw = '';
+        let rawName = "";
+        let studentIdRaw = "";
         try {
-          studentIdRaw = usingLegacy ? '' : (r[0] || '').toString().trim();
-          rawName = usingLegacy ? (r[0] || '').toString().trim() : (r[1] || '').toString().trim();
-          let email = (usingLegacy ? (r[1] || '') : (r[2] || '')).toString().trim().toLowerCase();
+          studentIdRaw = usingLegacy ? "" : (r[0] || "").toString().trim();
+          rawName = usingLegacy
+            ? (r[0] || "").toString().trim()
+            : (r[1] || "").toString().trim();
+          let email = (usingLegacy ? r[1] || "" : r[2] || "")
+            .toString()
+            .trim()
+            .toLowerCase();
 
-          if (!rawName) { continue; }
-          
+          if (!rawName) {
+            continue;
+          }
+
           // Student ID is now REQUIRED (not email)
-          if (!studentIdRaw) { errors.push(`${rawName}: Missing Student ID`); failCount++; continue; }
-          if (!/^\d{2}-\d{4}$/.test(studentIdRaw)) { errors.push(`${rawName} (${studentIdRaw}): Invalid Student ID format (expected YY-NNNN)`); failCount++; continue; }
-          if (seenStudentIds.has(studentIdRaw)) { errors.push(`${rawName} (${studentIdRaw}): Duplicate Student ID in file`); failCount++; continue; }
-          
-          if (!program || !course || !section) { errors.push(`${rawName} (${studentIdRaw}): Missing PROGRAM, Subject Code or Section headers above`); failCount++; continue; }
+          if (!studentIdRaw) {
+            errors.push(`${rawName}: Missing Student ID`);
+            failCount++;
+            continue;
+          }
+          if (!/^\d{2}-\d{4}$/.test(studentIdRaw)) {
+            errors.push(
+              `${rawName} (${studentIdRaw}): Invalid Student ID format (expected YY-NNNN)`
+            );
+            failCount++;
+            continue;
+          }
+          if (seenStudentIds.has(studentIdRaw)) {
+            errors.push(
+              `${rawName} (${studentIdRaw}): Duplicate Student ID in file`
+            );
+            failCount++;
+            continue;
+          }
+
+          if (!program || !course || !section) {
+            errors.push(
+              `${rawName} (${studentIdRaw}): Missing PROGRAM, Subject Code or Section headers above`
+            );
+            failCount++;
+            continue;
+          }
 
           // Email is optional - generate placeholder if not provided
           if (!email) {
-            email = `${studentIdRaw.replace('-', '')}@placeholder.local`;
+            email = `${studentIdRaw.replace("-", "")}@placeholder.local`;
           } else {
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(email)) { errors.push(`${rawName} (${studentIdRaw}): Invalid email format`); failCount++; continue; }
-            if (seenEmails.has(email)) { errors.push(`${rawName} (${studentIdRaw}): Duplicate email in file`); failCount++; continue; }
+            if (!emailRegex.test(email)) {
+              errors.push(`${rawName} (${studentIdRaw}): Invalid email format`);
+              failCount++;
+              continue;
+            }
+            if (seenEmails.has(email)) {
+              errors.push(
+                `${rawName} (${studentIdRaw}): Duplicate email in file`
+              );
+              failCount++;
+              continue;
+            }
           }
 
           // Track uniqueness within this import batch
@@ -2730,11 +2907,18 @@ export const StudentManagementPage: React.FC = () => {
             program,
             course,
             section,
-            studentId: studentIdRaw
+            studentId: studentIdRaw,
           });
-          if (result.success) { successCount++; } else { errors.push(`${rawName || studentIdRaw}: ${result.message}`); failCount++; }
+          if (result.success) {
+            successCount++;
+          } else {
+            errors.push(`${rawName || studentIdRaw}: ${result.message}`);
+            failCount++;
+          }
         } catch (err: any) {
-          errors.push(`${rawName || studentIdRaw || '(unknown row)'}: ${err.message}`);
+          errors.push(
+            `${rawName || studentIdRaw || "(unknown row)"}: ${err.message}`
+          );
           failCount++;
         }
       }
@@ -2744,16 +2928,18 @@ export const StudentManagementPage: React.FC = () => {
       if (failCount > 0) {
         message += `\n❌ Failed: ${failCount} students`;
         if (errors.length > 0 && errors.length <= 5) {
-          message += '\n\nErrors:\n' + errors.join('\n');
+          message += "\n\nErrors:\n" + errors.join("\n");
         } else if (errors.length > 5) {
-          message += '\n\nShowing first 5 errors:\n' + errors.slice(0, 5).join('\n');
+          message +=
+            "\n\nShowing first 5 errors:\n" + errors.slice(0, 5).join("\n");
           message += `\n... and ${errors.length - 5} more errors`;
         }
       }
 
       // Add reload notification if any students were imported
       if (successCount > 0) {
-        message += '\n\n🔄 The page will refresh automatically to show the newly imported students.';
+        message +=
+          "\n\n🔄 The page will refresh automatically to show the newly imported students.";
       }
 
       alert(message);
@@ -2763,13 +2949,13 @@ export const StudentManagementPage: React.FC = () => {
         window.location.reload();
       }
     } catch (error: any) {
-      console.error('Error importing Excel:', error);
+      console.error("Error importing Excel:", error);
       alert(`Failed to import Excel file: ${error.message}`);
     } finally {
       setIsImporting(false);
       // Reset file input
       if (fileInputRef.current) {
-        fileInputRef.current.value = '';
+        fileInputRef.current.value = "";
       }
     }
   };
@@ -2780,402 +2966,768 @@ export const StudentManagementPage: React.FC = () => {
 
   return (
     <>
-    <Card>
-      <CardHeader>
-        <CardTitle>Student Management</CardTitle>
-        <CardDescription>Add, edit, or remove student records</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="flex flex-col gap-4 mb-6">
-          {/* Search and Add Button Row */}
-          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-            <div className="relative w-full sm:w-72">
-              <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <Input
-                placeholder="Search students..."
-                className="pl-10"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-            <Button className="w-full sm:w-auto" onClick={openAddModal} data-tour="add-student-btn">
-              <FiPlus className="mr-2 h-4 w-4" />
-              Add Student
-            </Button>
-          </div>
-
-          {/* Bulk Action Toolbar */}
-          {selectedIds.length > 0 && (
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
-              <div className="text-sm font-medium text-yellow-800">
-                {selectedIds.length} selected
+      <Card>
+        <CardHeader>
+          <CardTitle>Student Management</CardTitle>
+          <CardDescription>
+            Add, edit, or remove student records
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col gap-4 mb-6">
+            {/* Search and Add Button Row */}
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+              <div className="relative w-full sm:w-72">
+                <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <Input
+                  placeholder="Search students..."
+                  className="pl-10"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
               </div>
-              <div className="flex gap-2 w-full sm:w-auto">
+              <Button
+                className="w-full sm:w-auto"
+                onClick={openAddModal}
+                data-tour="add-student-btn"
+              >
+                <FiPlus className="mr-2 h-4 w-4" />
+                Add Student
+              </Button>
+            </div>
+
+            {/* Bulk Action Toolbar */}
+            {selectedIds.length > 0 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                <div className="text-sm font-medium text-yellow-800">
+                  {selectedIds.length} selected
+                </div>
+                <div className="flex gap-2 w-full sm:w-auto">
+                  <Button
+                    variant="outline"
+                    className="flex-1 sm:flex-none"
+                    onClick={openBulkEdit}
+                  >
+                    <FiEdit2 className="mr-2 h-4 w-4" /> Bulk Edit
+                  </Button>
+                  <Button
+                    variant="danger"
+                    className="flex-1 sm:flex-none"
+                    onClick={openBulkDelete}
+                  >
+                    <FiTrash2 className="mr-2 h-4 w-4" /> Bulk Delete
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="flex-1 sm:flex-none"
+                    onClick={() => setSelectedIds([])}
+                  >
+                    Clear
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Excel Import/Export Section */}
+            <div className="border-t pt-4">
+              <h3 className="text-sm font-semibold text-gray-900 mb-3">
+                📊 Bulk Import via Excel
+              </h3>
+              <p className="text-xs text-gray-500 mb-3">
+                Save time by importing multiple students at once using our Excel
+                template
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3">
                 <Button
                   variant="outline"
-                  className="flex-1 sm:flex-none"
-                  onClick={openBulkEdit}
+                  className="flex-1"
+                  onClick={handleDownloadTemplate}
                 >
-                  <FiEdit2 className="mr-2 h-4 w-4" /> Bulk Edit
-                </Button>
-                <Button
-                  variant="danger"
-                  className="flex-1 sm:flex-none"
-                  onClick={openBulkDelete}
-                >
-                  <FiTrash2 className="mr-2 h-4 w-4" /> Bulk Delete
+                  <FiDownload className="mr-2 h-4 w-4" />
+                  Download Excel Template
                 </Button>
                 <Button
                   variant="outline"
-                  className="flex-1 sm:flex-none"
-                  onClick={() => setSelectedIds([])}
+                  className="flex-1"
+                  onClick={triggerFileInput}
+                  disabled={isImporting}
                 >
-                  Clear
+                  <FiUpload className="mr-2 h-4 w-4" />
+                  {isImporting ? "Importing..." : "Import Excel File"}
                 </Button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={handleImportExcel}
+                  style={{ display: "none" }}
+                />
+              </div>
+              <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <p className="text-xs text-blue-800 mb-3">
+                  <strong>💡 How to use:</strong> Download the template, fill in
+                  your student data using the format below, save it, and then
+                  import it back. All students will be added automatically!
+                </p>
+                <ul className="text-xs text-blue-700 mt-2 ml-4 list-disc space-y-1">
+                  <li>
+                    <strong>Student ID:</strong> Use format 00-0000 (e.g.,
+                    21-1234, 22-5678)
+                  </li>
+                  <li>
+                    <strong>Name:</strong> Last Name, First Name, and optional
+                    Middle Initial
+                  </li>
+                  <li>
+                    <strong>Email:</strong> Valid email address (required)
+                  </li>
+                  <li>
+                    <strong>Program/Course/Section:</strong> Must match your
+                    course settings
+                  </li>
+                </ul>
+                <p className="text-xs text-blue-700 mt-2">
+                  <strong>ℹ️ Note:</strong> After importing, the page will
+                  automatically refresh to display your newly added students.
+                </p>
               </div>
             </div>
-          )}
-
-          {/* Excel Import/Export Section */}
-          <div className="border-t pt-4">
-            <h3 className="text-sm font-semibold text-gray-900 mb-3">
-              📊 Bulk Import via Excel
-            </h3>
-            <p className="text-xs text-gray-500 mb-3">
-              Save time by importing multiple students at once using our Excel template
-            </p>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={handleDownloadTemplate}
-              >
-                <FiDownload className="mr-2 h-4 w-4" />
-                Download Excel Template
-              </Button>
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={triggerFileInput}
-                disabled={isImporting}
-              >
-                <FiUpload className="mr-2 h-4 w-4" />
-                {isImporting ? 'Importing...' : 'Import Excel File'}
-              </Button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".xlsx,.xls"
-                onChange={handleImportExcel}
-                style={{ display: 'none' }}
-              />
-            </div>
-            <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
-              <p className="text-xs text-blue-800">
-                <strong>💡 How to use:</strong> Download the template, fill in your student data using the format below, save it, and then import it back. All students will be added automatically!
-              </p>
-              <ul className="text-xs text-blue-700 mt-2 ml-4 list-disc space-y-1">
-                <li><strong>Student ID:</strong> Use format 00-0000 (e.g., 21-1234, 22-5678)</li>
-                <li><strong>Name:</strong> Last Name, First Name, and optional Middle Initial</li>
-                <li><strong>Email:</strong> Valid email address (required)</li>
-                <li><strong>Program/Course/Section:</strong> Must match your course settings</li>
-              </ul>
-              <p className="text-xs text-blue-700 mt-2">
-                <strong>ℹ️ Note:</strong> After importing, the page will automatically refresh to display your newly added students.
-              </p>
-            </div>
           </div>
-        </div>
 
-        {/* Desktop Table View */}
-        <div className="hidden md:block overflow-x-auto rounded-lg border relative">
-          <table className="w-full text-sm" data-tour="students-table">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-3">
-                  <input
-                    type="checkbox"
-                    aria-label="Select All"
-                    checked={isAllSelected}
-                    onChange={toggleSelectAll}
-                    className="h-4 w-4 rounded border-gray-300 text-gray-600 focus:ring-gray-500"
-                  />
-                </th>
-                <th className="px-4 py-3 text-left font-medium text-gray-600">
-                  STUDENT ID
-                </th>
-                <th className="px-4 py-3 text-left font-medium text-gray-600">
-                  NAME
-                </th>
-                <th className="px-4 py-3 text-left font-medium text-gray-600">
-                  EMAIL
-                </th>
-                <th className="px-4 py-3 text-left font-medium text-gray-600">
-                  PROGRAM - COURSE - SECTION
-                </th>
-                <th className="px-4 py-3 text-right font-medium text-gray-600">
-                  ACTIONS
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredStudents.length > 0 ? (
-                filteredStudents.map((student) => (
-                  <tr key={student.id}>
-                    <td className="px-4 py-3">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.includes(student.id)}
-                        onChange={() => toggleSelect(student.id)}
-                        className="h-4 w-4 rounded border-gray-300 text-gray-600 focus:ring-gray-500"
-                      />
-                    </td>
-                    <td className="px-4 py-3 font-medium">{student.displayStudentId || student.studentId || student.id}</td>
-                    <td className="px-4 py-3">{student.name}</td>
-                    <td className="px-4 py-3">{student.email}</td>
-                    <td className="px-4 py-3">
-                      <span className="inline-flex items-center">
-                        {student.program || 'N/A'} - {student.course} - Section {student.section}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <CustomDropdown>
-                        <DropdownTrigger>
-                          <FiMoreVertical className="h-4 w-4" />{" "}
-                          {/* ICON RESTORED */}
-                        </DropdownTrigger>
-                        <DropdownContent>
-                          <DropdownMenuItem
-                            onClick={() => openEditModal(student)}
-                          >
-                            <FiEdit2 className="mr-2 h-4 w-4" />{" "}
-                            {/* ICON RESTORED */}
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => openDeleteModal(student)}
-                            className="text-red-600 hover:bg-red-50"
-                          >
-                            <FiTrash2 className="mr-2 h-4 w-4" />{" "}
-                            {/* ICON RESTORED */}
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownContent>
-                      </CustomDropdown>
-                    </td>
-                  </tr>
-                ))
-              ) : (
+          {/* Desktop Table View */}
+          <div className="hidden md:block overflow-x-auto rounded-lg border relative">
+            <table className="w-full text-sm" data-tour="students-table">
+              <thead className="bg-gray-50">
                 <tr>
-                  <td colSpan={5} className="text-center px-4 py-4">
-                    No students found.
-                  </td>
+                  <th className="px-4 py-3">
+                    <input
+                      type="checkbox"
+                      aria-label="Select All"
+                      checked={isAllSelected}
+                      onChange={toggleSelectAll}
+                      className="h-4 w-4 rounded border-gray-300 text-gray-600 focus:ring-gray-500"
+                    />
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-600">
+                    STUDENT ID
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-600">
+                    NAME
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-600">
+                    EMAIL
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-600">
+                    PROGRAM - COURSE - SECTION
+                  </th>
+                  <th className="px-4 py-3 text-right font-medium text-gray-600">
+                    ACTIONS
+                  </th>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Mobile Card View */}
-        <div className="md:hidden space-y-4">
-          {filteredStudents.length > 0 ? (
-            filteredStudents.map((student) => (
-              <div
-                key={student.id}
-                className="bg-white p-4 rounded-lg border shadow-sm"
-              >
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="font-bold text-gray-800">{student.name}</p>
-                    <p className="text-xs text-gray-500">{student.id}</p>
-                    <div className="mt-2">
-                      <label className="inline-flex items-center gap-2 text-xs text-gray-600">
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredStudents.length > 0 ? (
+                  filteredStudents.map((student) => (
+                    <tr key={student.id}>
+                      <td className="px-4 py-3">
                         <input
                           type="checkbox"
                           checked={selectedIds.includes(student.id)}
                           onChange={() => toggleSelect(student.id)}
                           className="h-4 w-4 rounded border-gray-300 text-gray-600 focus:ring-gray-500"
                         />
-                        Select
-                      </label>
+                      </td>
+                      <td className="px-4 py-3 font-medium">
+                        {student.displayStudentId ||
+                          student.studentId ||
+                          student.id}
+                      </td>
+                      <td className="px-4 py-3">{student.name}</td>
+                      <td className="px-4 py-3">{student.email}</td>
+                      <td className="px-4 py-3">
+                        <span className="inline-flex items-center">
+                          {student.program || "N/A"} - {student.course} -
+                          Section {student.section}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <CustomDropdown>
+                          <DropdownTrigger>
+                            <FiMoreVertical className="h-4 w-4" />{" "}
+                            {/* ICON RESTORED */}
+                          </DropdownTrigger>
+                          <DropdownContent>
+                            <DropdownMenuItem
+                              onClick={() => openEditModal(student)}
+                            >
+                              <FiEdit2 className="mr-2 h-4 w-4" />{" "}
+                              {/* ICON RESTORED */}
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => openDeleteModal(student)}
+                              className="text-red-600 hover:bg-red-50"
+                            >
+                              <FiTrash2 className="mr-2 h-4 w-4" />{" "}
+                              {/* ICON RESTORED */}
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownContent>
+                        </CustomDropdown>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={5} className="text-center px-4 py-4">
+                      No students found.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile Card View */}
+          <div className="md:hidden space-y-4">
+            {filteredStudents.length > 0 ? (
+              filteredStudents.map((student) => (
+                <div
+                  key={student.id}
+                  className="bg-white p-4 rounded-lg border shadow-sm"
+                >
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="font-bold text-gray-800">{student.name}</p>
+                      <p className="text-xs text-gray-500">{student.id}</p>
+                      <div className="mt-2">
+                        <label className="inline-flex items-center gap-2 text-xs text-gray-600">
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.includes(student.id)}
+                            onChange={() => toggleSelect(student.id)}
+                            className="h-4 w-4 rounded border-gray-300 text-gray-600 focus:ring-gray-500"
+                          />
+                          Select
+                        </label>
+                      </div>
+                    </div>
+                    <CustomDropdown>
+                      <DropdownTrigger>
+                        <FiMoreVertical className="h-5 w-5 text-gray-500" />
+                      </DropdownTrigger>
+                      <DropdownContent>
+                        <DropdownMenuItem
+                          onClick={() => openEditModal(student)}
+                        >
+                          <FiEdit2 className="mr-2 h-4 w-4" />
+                          Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => openDeleteModal(student)}
+                          className="text-red-600"
+                        >
+                          <FiTrash2 className="mr-2 h-4 w-4" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownContent>
+                    </CustomDropdown>
+                  </div>
+                  <div className="mt-4 border-t pt-4 space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Email:</span>
+                      <span className="font-medium text-gray-800 truncate">
+                        {student.email}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Program:</span>
+                      <span className="font-medium text-gray-800">
+                        {student.program || "N/A"} - {student.course} - Section{" "}
+                        {student.section}
+                      </span>
                     </div>
                   </div>
-                  <CustomDropdown>
-                    <DropdownTrigger>
-                      <FiMoreVertical className="h-5 w-5 text-gray-500" />
-                    </DropdownTrigger>
-                    <DropdownContent>
-                      <DropdownMenuItem onClick={() => openEditModal(student)}>
-                        <FiEdit2 className="mr-2 h-4 w-4" />
-                        Edit
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => openDeleteModal(student)}
-                        className="text-red-600"
-                      >
-                        <FiTrash2 className="mr-2 h-4 w-4" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownContent>
-                  </CustomDropdown>
                 </div>
-                <div className="mt-4 border-t pt-4 space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Email:</span>
-                    <span className="font-medium text-gray-800 truncate">
-                      {student.email}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Program:</span>
-                    <span className="font-medium text-gray-800">
-                      {student.program || 'N/A'} - {student.course} - Section {student.section}
-                    </span>
-                  </div>
-                </div>
+              ))
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-gray-500">No students found.</p>
               </div>
-            ))
-          ) : (
-            <div className="text-center py-8">
-              <p className="text-gray-500">No students found.</p>
-            </div>
-          )}
-        </div>
-      </CardContent>
-  </Card>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
-    {/* Bulk Delete Modal */}
-    {showBulkDeleteModal && (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
-          <div className="text-center">
-            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
-              <FiTrash2 className="h-6 w-6 text-red-600" />
-            </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              Delete Selected Students
-            </h3>
-            <p className="text-sm text-gray-500 mb-4">
-              You are about to delete {selectedIds.length} student(s). This action cannot be undone.
-            </p>
-            <Label className="text-sm text-left block mb-2">
-              Type <span className="font-mono font-bold text-red-600">delete</span> to confirm:
-            </Label>
-            <Input
-              value={bulkDeleteConfirm}
-              onChange={(e) => setBulkDeleteConfirm(e.target.value)}
-              placeholder="delete"
-              className="text-center font-mono mb-4"
-              autoFocus
-            />
-            <div className="flex gap-3">
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => {
-                  setShowBulkDeleteModal(false);
-                  setBulkDeleteConfirm("");
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="danger"
-                className="flex-1"
-                disabled={bulkDeleteConfirm.toLowerCase() !== "delete"}
-                onClick={confirmBulkDelete}
-              >
-                Delete
-              </Button>
+      {/* Bulk Delete Modal */}
+      {showBulkDeleteModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+            <div className="text-center">
+              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+                <FiTrash2 className="h-6 w-6 text-red-600" />
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                Delete Selected Students
+              </h3>
+              <p className="text-sm text-gray-500 mb-4">
+                You are about to delete {selectedIds.length} student(s). This
+                action cannot be undone.
+              </p>
+              <Label className="text-sm text-left block mb-2">
+                Type{" "}
+                <span className="font-mono font-bold text-red-600">delete</span>{" "}
+                to confirm:
+              </Label>
+              <Input
+                value={bulkDeleteConfirm}
+                onChange={(e) => setBulkDeleteConfirm(e.target.value)}
+                placeholder="delete"
+                className="text-center font-mono mb-4"
+                autoFocus
+              />
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => {
+                    setShowBulkDeleteModal(false);
+                    setBulkDeleteConfirm("");
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="danger"
+                  className="flex-1"
+                  disabled={bulkDeleteConfirm.toLowerCase() !== "delete"}
+                  onClick={confirmBulkDelete}
+                >
+                  Delete
+                </Button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-    )}
+      )}
 
-    {/* Bulk Edit Modal */}
-    {showBulkEditModal && (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
-          <div className="text-center">
-            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 mb-4">
-              <FiEdit2 className="h-6 w-6 text-blue-600" />
-            </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              Bulk Edit Students
-            </h3>
-            <p className="text-sm text-gray-500 mb-4">
-              Leave a field blank to keep existing values for each student.
-            </p>
-            <div className="space-y-3 text-left">
-              <div>
-                <Label className="text-xs">Program</Label>
-                <Input
-                  value={bulkEditData.program}
-                  onChange={(e) =>
-                    setBulkEditData((d) => ({ ...d, program: e.target.value }))
-                  }
-                  placeholder="e.g., BSIT"
-                />
+      {/* Bulk Edit Modal */}
+      {showBulkEditModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+            <div className="text-center">
+              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 mb-4">
+                <FiEdit2 className="h-6 w-6 text-blue-600" />
               </div>
-              <div>
-                <Label className="text-xs">Subject Code</Label>
-                <Input
-                  value={bulkEditData.course}
-                  onChange={(e) =>
-                    setBulkEditData((d) => ({ ...d, course: e.target.value }))
-                  }
-                  placeholder="e.g., IM101"
-                />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                Bulk Edit Students
+              </h3>
+              <p className="text-sm text-gray-500 mb-4">
+                Leave a field blank to keep existing values for each student.
+              </p>
+              <div className="space-y-3 text-left">
+                <div>
+                  <Label className="text-xs">Program</Label>
+                  <Input
+                    value={bulkEditData.program}
+                    onChange={(e) =>
+                      setBulkEditData((d) => ({
+                        ...d,
+                        program: e.target.value,
+                      }))
+                    }
+                    placeholder="e.g., BSIT"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Subject Code</Label>
+                  <Input
+                    value={bulkEditData.course}
+                    onChange={(e) =>
+                      setBulkEditData((d) => ({ ...d, course: e.target.value }))
+                    }
+                    placeholder="e.g., IM101"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Section</Label>
+                  <Input
+                    value={bulkEditData.section}
+                    onChange={(e) =>
+                      setBulkEditData((d) => ({
+                        ...d,
+                        section: e.target.value,
+                      }))
+                    }
+                    placeholder="e.g., 1-4"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Email</Label>
+                  <Input
+                    type="email"
+                    value={bulkEditData.email}
+                    onChange={(e) =>
+                      setBulkEditData((d) => ({ ...d, email: e.target.value }))
+                    }
+                    placeholder="new-email@example.com"
+                  />
+                </div>
               </div>
-              <div>
-                <Label className="text-xs">Section</Label>
-                <Input
-                  value={bulkEditData.section}
-                  onChange={(e) =>
-                    setBulkEditData((d) => ({ ...d, section: e.target.value }))
-                  }
-                  placeholder="e.g., 1-4"
-                />
+              <div className="flex gap-3 mt-6">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => {
+                    setShowBulkEditModal(false);
+                    setBulkEditData({
+                      program: "",
+                      course: "",
+                      section: "",
+                      email: "",
+                    });
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button className="flex-1" onClick={saveBulkEdit}>
+                  Save Changes
+                </Button>
               </div>
-              <div>
-                <Label className="text-xs">Email</Label>
-                <Input
-                  type="email"
-                  value={bulkEditData.email}
-                  onChange={(e) =>
-                    setBulkEditData((d) => ({ ...d, email: e.target.value }))
-                  }
-                  placeholder="new-email@example.com"
-                />
-              </div>
-            </div>
-            <div className="flex gap-3 mt-6">
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => {
-                  setShowBulkEditModal(false);
-                  setBulkEditData({ program: "", course: "", section: "", email: "" });
-                }}
-              >
-                Cancel
-              </Button>
-              <Button className="flex-1" onClick={saveBulkEdit}>
-                Save Changes
-              </Button>
             </div>
           </div>
         </div>
-      </div>
-    )}
+      )}
     </>
   );
 };
 
 /**
- * 5. SETTINGS PAGE
+ * 5. SETTINGS PAGE (Cleaned)
  */
+export const SettingsPage: React.FC = () => {
+  // Logic restricted to settings only
+  const [lateThreshold, setLateThreshold] = useState<number>(15);
+  const [isLoadingSettings, setIsLoadingSettings] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [universityName, setUniversityName] = useState("University Name");
+
+  // Admin account state
+  const [adminEmail, setAdminEmail] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+  const [isPasswordLocked, setIsPasswordLocked] = useState(false);
+  const [passwordLockoutTime, setPasswordLockoutTime] = useState(0);
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const { db, auth } = await import("./firebase");
+        const { doc, getDoc } = await import("firebase/firestore");
+        const user = auth.currentUser;
+
+        if (user) {
+          setAdminEmail(user.email || "");
+          const settingsDoc = await getDoc(doc(db, "settings", user.uid));
+          if (settingsDoc.exists()) {
+            const settingsData = settingsDoc.data();
+            setLateThreshold(settingsData.lateThreshold || 15);
+            setUniversityName(settingsData.universityName || "University Name");
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching data:", error);
+      } finally {
+        setIsLoadingSettings(false);
+      }
+    };
+    fetchSettings();
+  }, []);
+
+  // Monitor password change lockout status
+  useEffect(() => {
+    if (!adminEmail) return;
+    const checkLockout = () => {
+      const { locked, remainingTime } = isLockedOut(
+        adminEmail,
+        "password-change"
+      );
+      setIsPasswordLocked(locked);
+      setPasswordLockoutTime(remainingTime);
+      if (!locked && passwordError?.includes("locked")) setPasswordError(null);
+    };
+    checkLockout();
+    const interval = setInterval(() => {
+      const { locked, remainingTime } = isLockedOut(
+        adminEmail,
+        "password-change"
+      );
+      setIsPasswordLocked(locked);
+      setPasswordLockoutTime(remainingTime);
+      if (!locked && isPasswordLocked) setPasswordError(null);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [adminEmail, isPasswordLocked, passwordError]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSaving(true);
+    try {
+      const { db, auth } = await import("./firebase");
+      const { doc, setDoc } = await import("firebase/firestore");
+      const user = auth.currentUser;
+      if (user) {
+        const form = e.target as HTMLFormElement;
+        const universityNameInput = form.querySelector(
+          "#university-name"
+        ) as HTMLInputElement;
+        const lateThresholdInput = form.querySelector(
+          "#late-threshold"
+        ) as HTMLInputElement;
+
+        if (universityNameInput) {
+          await setDoc(
+            doc(db, "settings", user.uid),
+            {
+              universityName: universityNameInput.value,
+              updatedAt: new Date().toISOString(),
+            },
+            { merge: true }
+          );
+          setUniversityName(universityNameInput.value);
+          alert("General settings saved successfully!");
+        } else if (lateThresholdInput) {
+          await setDoc(
+            doc(db, "settings", user.uid),
+            {
+              lateThreshold,
+              updatedAt: new Date().toISOString(),
+            },
+            { merge: true }
+          );
+          alert("Attendance settings saved successfully!");
+        }
+      }
+    } catch (error) {
+      console.error("Error saving settings:", error);
+      alert("Failed to save settings.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handlePasswordUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError(null);
+    const lockoutCheck = isLockedOut(adminEmail, "password-change");
+    if (lockoutCheck.locked) {
+      setPasswordError(
+        `Too many failed attempts. Try again in ${formatRemainingTime(
+          lockoutCheck.remainingTime
+        )}.`
+      );
+      return;
+    }
+    if (!currentPassword) {
+      setPasswordError("Current password is required");
+      return;
+    }
+    if (!newPassword || newPassword.length < 6) {
+      setPasswordError("New password must be at least 6 characters");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError("New passwords do not match");
+      return;
+    }
+
+    setIsUpdatingPassword(true);
+    try {
+      const { auth } = await import("./firebase");
+      const {
+        EmailAuthProvider,
+        reauthenticateWithCredential,
+        updatePassword,
+      } = await import("firebase/auth");
+      const user = auth.currentUser;
+      if (!user || !user.email) return;
+
+      const credential = EmailAuthProvider.credential(
+        user.email,
+        currentPassword
+      );
+      try {
+        await reauthenticateWithCredential(user, credential);
+      } catch (error: any) {
+        const result = recordFailedAttempt(adminEmail, "password-change");
+        if (result.locked) {
+          setPasswordError("Account locked for 3 minutes.");
+          setIsPasswordLocked(true);
+          setPasswordLockoutTime(180);
+        } else {
+          setPasswordError("Incorrect password.");
+        }
+        setIsUpdatingPassword(false);
+        return;
+      }
+      await updatePassword(user, newPassword);
+      clearAttempts(adminEmail, "password-change");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      alert("Password updated successfully!");
+    } catch (error: any) {
+      setPasswordError(error.message || "Failed to update password.");
+    } finally {
+      setIsUpdatingPassword(false);
+    }
+  };
+
+  return (
+    <Card className="max-w-2xl mx-auto">
+      <CardHeader>
+        <CardTitle>Settings</CardTitle>
+        <CardDescription>
+          Manage system settings and preferences
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <CustomTabs defaultValue="general">
+          <TabsList>
+            <TabsTrigger value="general">General</TabsTrigger>
+            {/* REMOVED COURSES TAB TRIGGER */}
+            <TabsTrigger value="attendance">Attendance</TabsTrigger>
+            <TabsTrigger value="admin">Instructor Account</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="general" className="pt-6">
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="system-name">System Name</Label>
+                <Input
+                  id="system-name"
+                  defaultValue="AttendScan"
+                  disabled
+                  className="bg-gray-100"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="university-name">
+                  University Name <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="university-name"
+                  value={universityName}
+                  onChange={(e) => setUniversityName(e.target.value)}
+                  required
+                />
+              </div>
+              <Button type="submit" disabled={isSaving}>
+                {isSaving ? "Saving..." : "Save Changes"}
+              </Button>
+            </form>
+          </TabsContent>
+
+          {/* REMOVED COURSES TAB CONTENT */}
+
+          <TabsContent value="attendance" className="pt-6">
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="late-threshold">Late Threshold (minutes)</Label>
+                <Input
+                  id="late-threshold"
+                  type="number"
+                  min="1"
+                  max="60"
+                  value={lateThreshold}
+                  onChange={(e) =>
+                    setLateThreshold(parseInt(e.target.value) || 15)
+                  }
+                />
+                <p className="text-sm text-gray-500">
+                  Mark student as LATE if they scan after this time.
+                </p>
+              </div>
+              <Button type="submit" disabled={isSaving || isLoadingSettings}>
+                {isSaving ? "Saving..." : "Save Changes"}
+              </Button>
+            </form>
+          </TabsContent>
+
+          <TabsContent value="admin" className="pt-6">
+            <form onSubmit={handlePasswordUpdate} className="space-y-6">
+              <div className="space-y-2">
+                <Label>Instructor Email</Label>
+                <Input value={adminEmail} disabled className="bg-gray-50" />
+              </div>
+              <div className="border-t pt-4 mt-4">
+                <h3 className="text-lg font-semibold mb-4">Change Password</h3>
+                {passwordError && (
+                  <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+                    {passwordError}
+                  </div>
+                )}
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="current-password">Current Password</Label>
+                    <Input
+                      id="current-password"
+                      type="password"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      disabled={isUpdatingPassword || isPasswordLocked}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="new-password">New Password</Label>
+                    <Input
+                      id="new-password"
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      disabled={isUpdatingPassword || isPasswordLocked}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="confirm-password">
+                      Confirm New Password
+                    </Label>
+                    <Input
+                      id="confirm-password"
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      disabled={isUpdatingPassword || isPasswordLocked}
+                    />
+                  </div>
+                </div>
+              </div>
+              <Button
+                type="submit"
+                disabled={
+                  isUpdatingPassword ||
+                  isPasswordLocked ||
+                  !currentPassword ||
+                  !newPassword ||
+                  !confirmPassword
+                }
+              >
+                {isPasswordLocked
+                  ? `Locked - Wait ${formatRemainingTime(passwordLockoutTime)}`
+                  : isUpdatingPassword
+                  ? "Updating..."
+                  : "Update Password"}
+              </Button>
+            </form>
+          </TabsContent>
+        </CustomTabs>
+      </CardContent>
+    </Card>
+  );
+};
 
 interface CourseSection {
   program: string;
@@ -3183,7 +3735,308 @@ interface CourseSection {
   section: string;
 }
 
-export const SettingsPage: React.FC = () => {
+/**
+ * NEW: COURSES PAGE
+ * Extracted from SettingsPage
+ */
+export const CoursesPage: React.FC = () => {
+  const [courseSections, setCourseSections] = useState<CourseSection[]>([]);
+  const [newProgram, setNewProgram] = useState("");
+  const [newCourse, setNewCourse] = useState("");
+  const [newSection, setNewSection] = useState("");
+  const [isLoadingCourses, setIsLoadingCourses] = useState(true);
+
+  // Delete confirmation modal state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [courseToDelete, setCourseToDelete] = useState<CourseSection | null>(
+    null
+  );
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+
+  // Fetch courses on mount
+  useEffect(() => {
+    const fetchCourses = async () => {
+      try {
+        const { db, auth } = await import("./firebase");
+        const { doc, getDoc } = await import("firebase/firestore");
+        const user = auth.currentUser;
+
+        if (user) {
+          const courseDoc = await getDoc(
+            doc(db, "instructorCourses", user.uid)
+          );
+          if (courseDoc.exists()) {
+            setCourseSections(courseDoc.data().courseSections || []);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching data:", error);
+      } finally {
+        setIsLoadingCourses(false);
+      }
+    };
+    fetchCourses();
+  }, []);
+
+  const handleAddCourseSection = async () => {
+    if (!newProgram.trim() || !newCourse.trim() || !newSection.trim()) {
+      alert("Please enter program, subject code, and section");
+      return;
+    }
+
+    const exists = courseSections.some(
+      (cs) =>
+        cs.program === newProgram.trim() &&
+        cs.course === newCourse.trim() &&
+        cs.section === newSection.trim()
+    );
+
+    if (exists) {
+      alert("This program-course-section combination already exists");
+      return;
+    }
+
+    try {
+      const { db, auth } = await import("./firebase");
+      const { doc, setDoc } = await import("firebase/firestore");
+      const user = auth.currentUser;
+
+      if (user) {
+        const updatedCourseSections = [
+          ...courseSections,
+          {
+            program: newProgram.trim(),
+            course: newCourse.trim(),
+            section: newSection.trim(),
+          },
+        ];
+        await setDoc(doc(db, "instructorCourses", user.uid), {
+          courseSections: updatedCourseSections,
+          updatedAt: new Date().toISOString(),
+        });
+        setCourseSections(updatedCourseSections);
+        setNewProgram("");
+        setNewCourse("");
+        setNewSection("");
+      }
+    } catch (error) {
+      console.error("Error adding course-section:", error);
+      alert("Failed to add course-section. Please try again.");
+    }
+  };
+
+  const handleDeleteCourseSection = async (courseSection: CourseSection) => {
+    setCourseToDelete(courseSection);
+    setShowDeleteModal(true);
+    setDeleteConfirmText("");
+  };
+
+  const confirmDeleteCourseSection = async () => {
+    if (deleteConfirmText.toLowerCase() !== "delete") {
+      alert('Please type "delete" to confirm');
+      return;
+    }
+
+    if (!courseToDelete) return;
+
+    try {
+      const { db, auth } = await import("./firebase");
+      const { doc, setDoc } = await import("firebase/firestore");
+      const user = auth.currentUser;
+
+      if (user) {
+        const updatedCourseSections = courseSections.filter(
+          (cs) =>
+            !(
+              cs.program === courseToDelete.program &&
+              cs.course === courseToDelete.course &&
+              cs.section === courseToDelete.section
+            )
+        );
+        await setDoc(doc(db, "instructorCourses", user.uid), {
+          courseSections: updatedCourseSections,
+          updatedAt: new Date().toISOString(),
+        });
+        setCourseSections(updatedCourseSections);
+
+        setShowDeleteModal(false);
+        setCourseToDelete(null);
+        setDeleteConfirmText("");
+      }
+    } catch (error) {
+      console.error("Error deleting course-section:", error);
+      alert("Failed to delete course-section. Please try again.");
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Courses</CardTitle>
+          <CardDescription>
+            Manage your courses and sections here.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {/* Add Course-Section Form */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-4">
+            <Input
+              placeholder="Program (e.g., BSIT)"
+              value={newProgram}
+              onChange={(e) => setNewProgram(e.target.value)}
+              className="md:col-span-1"
+            />
+            <Input
+              placeholder="Subject (e.g., IM101)"
+              value={newCourse}
+              onChange={(e) => setNewCourse(e.target.value)}
+              className="md:col-span-1"
+            />
+            <Input
+              placeholder="Section (e.g., 1-4)"
+              value={newSection}
+              onChange={(e) => setNewSection(e.target.value)}
+              className="md:col-span-1"
+            />
+            <Button
+              type="button"
+              onClick={handleAddCourseSection}
+              disabled={
+                !newProgram.trim() || !newCourse.trim() || !newSection.trim()
+              }
+              className="md:col-span-1"
+            >
+              <FiPlus className="mr-2 h-4 w-4" />
+              Add Course
+            </Button>
+          </div>
+
+          {/* Course-Sections List */}
+          {isLoadingCourses ? (
+            <p className="text-sm text-gray-500">Loading courses...</p>
+          ) : courseSections.length > 0 ? (
+            <div className="space-y-2">
+              {courseSections.map((cs, index) => (
+                <div
+                  key={index}
+                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-bold text-blue-700 bg-blue-50 px-2 py-1 rounded">
+                      {cs.program}
+                    </span>
+                    <span className="text-xs text-gray-400">→</span>
+                    <span className="text-sm font-semibold text-gray-900">
+                      {cs.course}
+                    </span>
+                    <span className="text-xs text-gray-400">→</span>
+                    <span className="text-sm text-gray-700">
+                      Section {cs.section}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => handleDeleteCourseSection(cs)}
+                    className="text-red-600 hover:text-red-700 p-1"
+                    title="Delete course-section"
+                  >
+                    <FiTrash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 bg-gray-50 rounded-lg border border-gray-200">
+              <p className="text-sm text-gray-500">No courses added yet</p>
+              <p className="text-xs text-gray-400 mt-1">
+                Add your first course above
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Delete Confirmation Modal (Moved from Settings) */}
+      {showDeleteModal && courseToDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+            <div className="text-center">
+              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+                <FiTrash2 className="h-6 w-6 text-red-600" />
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                Delete Course
+              </h3>
+              <div className="text-left mb-4 p-3 bg-gray-50 rounded-lg">
+                <p className="text-sm font-semibold text-gray-700 mb-2">
+                  You are about to delete:
+                </p>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-blue-700 bg-blue-50 px-2 py-1 rounded">
+                    {courseToDelete.program}
+                  </span>
+                  <span className="text-xs text-gray-400">→</span>
+                  <span className="text-sm font-semibold text-gray-900">
+                    {courseToDelete.course}
+                  </span>
+                  <span className="text-xs text-gray-400">→</span>
+                  <span className="text-sm text-gray-700">
+                    Section {courseToDelete.section}
+                  </span>
+                </div>
+              </div>
+              <p className="text-sm text-gray-500 mb-4">
+                This action cannot be undone.
+              </p>
+              <div className="mb-6">
+                <Label
+                  htmlFor="delete-confirm"
+                  className="text-left block mb-2"
+                >
+                  Type{" "}
+                  <span className="font-mono font-bold text-red-600">
+                    delete
+                  </span>{" "}
+                  to confirm:
+                </Label>
+                <Input
+                  id="delete-confirm"
+                  type="text"
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  placeholder="Type 'delete' here"
+                  className="text-center font-mono"
+                  autoFocus
+                />
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setCourseToDelete(null);
+                    setDeleteConfirmText("");
+                  }}
+                  className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmDeleteCourseSection}
+                  disabled={deleteConfirmText.toLowerCase() !== "delete"}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Delete Course
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export const SettingPage: React.FC = () => {
   const [courseSections, setCourseSections] = useState<CourseSection[]>([]);
   const [newProgram, setNewProgram] = useState("");
   const [newCourse, setNewCourse] = useState("");
@@ -3196,7 +4049,9 @@ export const SettingsPage: React.FC = () => {
 
   // Delete confirmation modal state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [courseToDelete, setCourseToDelete] = useState<CourseSection | null>(null);
+  const [courseToDelete, setCourseToDelete] = useState<CourseSection | null>(
+    null
+  );
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
   // Admin account state
@@ -3291,9 +4146,9 @@ export const SettingsPage: React.FC = () => {
 
     // Check if this program-course-section combination already exists
     const exists = courseSections.some(
-      (cs) => 
-        cs.program === newProgram.trim() && 
-        cs.course === newCourse.trim() && 
+      (cs) =>
+        cs.program === newProgram.trim() &&
+        cs.course === newCourse.trim() &&
         cs.section === newSection.trim()
     );
 
@@ -3365,7 +4220,7 @@ export const SettingsPage: React.FC = () => {
           updatedAt: new Date().toISOString(),
         });
         setCourseSections(updatedCourseSections);
-        
+
         // Close modal and reset state
         setShowDeleteModal(false);
         setCourseToDelete(null);
@@ -3389,8 +4244,12 @@ export const SettingsPage: React.FC = () => {
       if (user) {
         // Get form data
         const form = e.target as HTMLFormElement;
-        const universityNameInput = form.querySelector('#university-name') as HTMLInputElement;
-        const lateThresholdInput = form.querySelector('#late-threshold') as HTMLInputElement;
+        const universityNameInput = form.querySelector(
+          "#university-name"
+        ) as HTMLInputElement;
+        const lateThresholdInput = form.querySelector(
+          "#late-threshold"
+        ) as HTMLInputElement;
 
         // Determine which form was submitted based on which fields exist
         const isGeneralForm = universityNameInput !== null;
@@ -3557,7 +4416,9 @@ export const SettingsPage: React.FC = () => {
                 Delete Course
               </h3>
               <div className="text-left mb-4 p-3 bg-gray-50 rounded-lg">
-                <p className="text-sm font-semibold text-gray-700 mb-2">You are about to delete:</p>
+                <p className="text-sm font-semibold text-gray-700 mb-2">
+                  You are about to delete:
+                </p>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-bold text-blue-700 bg-blue-50 px-2 py-1 rounded">
                     {courseToDelete.program}
@@ -3573,11 +4434,19 @@ export const SettingsPage: React.FC = () => {
                 </div>
               </div>
               <p className="text-sm text-gray-500 mb-4">
-                This action cannot be undone. All students enrolled in this course will need to be reassigned.
+                This action cannot be undone. All students enrolled in this
+                course will need to be reassigned.
               </p>
               <div className="mb-6">
-                <Label htmlFor="delete-confirm" className="text-left block mb-2">
-                  Type <span className="font-mono font-bold text-red-600">delete</span> to confirm:
+                <Label
+                  htmlFor="delete-confirm"
+                  className="text-left block mb-2"
+                >
+                  Type{" "}
+                  <span className="font-mono font-bold text-red-600">
+                    delete
+                  </span>{" "}
+                  to confirm:
                 </Label>
                 <Input
                   id="delete-confirm"
@@ -3617,269 +4486,278 @@ export const SettingsPage: React.FC = () => {
         <CardHeader>
           <CardTitle>Settings</CardTitle>
           <CardDescription>
-          Manage system settings and preferences
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <CustomTabs defaultValue="general">
-          <TabsList>
-            <TabsTrigger value="general">General</TabsTrigger>
-            <TabsTrigger value="courses">Courses</TabsTrigger>
-            <TabsTrigger value="attendance">Attendance</TabsTrigger>
-            <TabsTrigger value="admin">Instructor Account</TabsTrigger>
-          </TabsList>
+            Manage system settings and preferences
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <CustomTabs defaultValue="general">
+            <TabsList>
+              <TabsTrigger value="general">General</TabsTrigger>
+              <TabsTrigger value="courses">Courses</TabsTrigger>
+              <TabsTrigger value="attendance">Attendance</TabsTrigger>
+              <TabsTrigger value="admin">Instructor Account</TabsTrigger>
+            </TabsList>
 
-          <TabsContent value="general" className="pt-6">
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="system-name">
-                  System Name <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="system-name"
-                  defaultValue="AttendScan"
-                  required
-                  disabled
-                  className="bg-gray-100"
-                />
-                <p className="text-xs text-gray-500">
-                  System name is locked and cannot be changed
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="university-name">
-                  University Name <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="university-name"
-                  value={universityName}
-                  onChange={(e) => setUniversityName(e.target.value)}
-                  required
-                />
-              </div>
-              <Button type="submit" disabled={isSaving}>
-                {isSaving ? "Saving..." : "Save Changes"}
-              </Button>
-            </form>
-          </TabsContent>
-
-          <TabsContent value="courses" className="pt-6">
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-sm font-semibold text-gray-900 mb-3">
-                  Your Courses & Sections
-                </h3>
-                <p className="text-xs text-gray-500 mb-4">
-                  Add courses and sections that you teach. These will be
-                  available when adding students and generating QR codes.
-                </p>
-
-                {/* Add Course-Section Form */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-4">
+            <TabsContent value="general" className="pt-6">
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="system-name">
+                    System Name <span className="text-red-500">*</span>
+                  </Label>
                   <Input
-                    placeholder="Program (e.g., BSIT, BSCS)"
-                    value={newProgram}
-                    onChange={(e) => setNewProgram(e.target.value)}
-                    className="md:col-span-1"
+                    id="system-name"
+                    defaultValue="AttendScan"
+                    required
+                    disabled
+                    className="bg-gray-100"
                   />
-                  <Input
-                    placeholder="Subject Code (e.g., IM101)"
-                    value={newCourse}
-                    onChange={(e) => setNewCourse(e.target.value)}
-                    className="md:col-span-1"
-                  />
-                  <Input
-                    placeholder="Section (e.g., 1-4)"
-                    value={newSection}
-                    onChange={(e) => setNewSection(e.target.value)}
-                    className="md:col-span-1"
-                  />
-                  <Button
-                    type="button"
-                    onClick={handleAddCourseSection}
-                    disabled={!newProgram.trim() || !newCourse.trim() || !newSection.trim()}
-                    className="md:col-span-1"
-                  >
-                    <FiPlus className="mr-2 h-4 w-4" />
-                    Add Course
-                  </Button>
+                  <p className="text-xs text-gray-500">
+                    System name is locked and cannot be changed
+                  </p>
                 </div>
-
-                {/* Course-Sections List */}
-                {isLoadingCourses ? (
-                  <p className="text-sm text-gray-500">Loading courses...</p>
-                ) : courseSections.length > 0 ? (
-                  <div className="space-y-2">
-                    {courseSections.map((cs, index) => (
-                      <div
-                        key={index}
-                        className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200"
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="text-sm font-bold text-blue-700 bg-blue-50 px-2 py-1 rounded">
-                            {cs.program}
-                          </span>
-                          <span className="text-xs text-gray-400">→</span>
-                          <span className="text-sm font-semibold text-gray-900">
-                            {cs.course}
-                          </span>
-                          <span className="text-xs text-gray-400">→</span>
-                          <span className="text-sm text-gray-700">
-                            Section {cs.section}
-                          </span>
-                        </div>
-                        <button
-                          onClick={() => handleDeleteCourseSection(cs)}
-                          className="text-red-600 hover:text-red-700 p-1"
-                          title="Delete course-section"
-                        >
-                          <FiTrash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 bg-gray-50 rounded-lg border border-gray-200">
-                    <p className="text-sm text-gray-500">
-                      No courses added yet
-                    </p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      Add your first course above
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="attendance" className="pt-6">
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="late-threshold" className="inline-flex items-center">
-                  Late Threshold (minutes)
-                  <HelpTooltip
-                    term="Late Threshold / Grace Period"
-                    definition="How many minutes after class starts can students scan and still be marked 'present'. After this time, they're marked 'late'. For example: 15 minutes means students have until 15 minutes after class begins."
+                <div className="space-y-2">
+                  <Label htmlFor="university-name">
+                    University Name <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="university-name"
+                    value={universityName}
+                    onChange={(e) => setUniversityName(e.target.value)}
+                    required
                   />
-                </Label>
-                {isLoadingSettings ? (
-                  <div className="flex items-center justify-center py-4">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
-                  </div>
-                ) : (
-                  <>
+                </div>
+                <Button type="submit" disabled={isSaving}>
+                  {isSaving ? "Saving..." : "Save Changes"}
+                </Button>
+              </form>
+            </TabsContent>
+
+            <TabsContent value="courses" className="pt-6">
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900 mb-3">
+                    Your Courses & Sections
+                  </h3>
+                  <p className="text-xs text-gray-500 mb-4">
+                    Add courses and sections that you teach. These will be
+                    available when adding students and generating QR codes.
+                  </p>
+
+                  {/* Add Course-Section Form */}
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-4">
                     <Input
-                      id="late-threshold"
-                      type="number"
-                      min="1"
-                      max="60"
-                      value={lateThreshold}
-                      onChange={(e) =>
-                        setLateThreshold(parseInt(e.target.value) || 15)
+                      placeholder="Program (e.g., BSIT, BSCS)"
+                      value={newProgram}
+                      onChange={(e) => setNewProgram(e.target.value)}
+                      className="md:col-span-1"
+                    />
+                    <Input
+                      placeholder="Subject Code (e.g., IM101)"
+                      value={newCourse}
+                      onChange={(e) => setNewCourse(e.target.value)}
+                      className="md:col-span-1"
+                    />
+                    <Input
+                      placeholder="Section (e.g., 1-4)"
+                      value={newSection}
+                      onChange={(e) => setNewSection(e.target.value)}
+                      className="md:col-span-1"
+                    />
+                    <Button
+                      type="button"
+                      onClick={handleAddCourseSection}
+                      disabled={
+                        !newProgram.trim() ||
+                        !newCourse.trim() ||
+                        !newSection.trim()
                       }
-                    />
-                    <p className="text-sm text-gray-500">
-                      Mark student as LATE if they scan after this time.
-                      (Current: {lateThreshold} minutes)
-                    </p>
-                  </>
-                )}
-              </div>
-              <Button type="submit" disabled={isSaving || isLoadingSettings}>
-                {isSaving ? "Saving..." : "Save Changes"}
-              </Button>
-            </form>
-          </TabsContent>
-
-          <TabsContent value="admin" className="pt-6">
-            <form onSubmit={handlePasswordUpdate} className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="admin-email">Instructor Email</Label>
-                <Input
-                  id="admin-email"
-                  type="email"
-                  value={adminEmail}
-                  disabled
-                  className="bg-gray-50"
-                />
-                <p className="text-sm text-gray-500">
-                  This is your current email address used for login.
-                </p>
-              </div>
-
-              <div className="border-t pt-4 mt-4">
-                <h3 className="text-lg font-semibold mb-4">Change Password</h3>
-
-                {passwordError && (
-                  <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-                    <p className="text-sm text-red-600">{passwordError}</p>
-                  </div>
-                )}
-
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="current-password">Current Password</Label>
-                    <Input
-                      id="current-password"
-                      type="password"
-                      value={currentPassword}
-                      onChange={(e) => setCurrentPassword(e.target.value)}
-                      placeholder="Enter your current password"
-                      disabled={isUpdatingPassword || isPasswordLocked}
-                    />
+                      className="md:col-span-1"
+                    >
+                      <FiPlus className="mr-2 h-4 w-4" />
+                      Add Course
+                    </Button>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="new-password">New Password</Label>
-                    <Input
-                      id="new-password"
-                      type="password"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="Enter new password (min 6 characters)"
-                      disabled={isUpdatingPassword || isPasswordLocked}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="confirm-password">
-                      Confirm New Password
-                    </Label>
-                    <Input
-                      id="confirm-password"
-                      type="password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="Re-enter new password"
-                      disabled={isUpdatingPassword || isPasswordLocked}
-                    />
-                  </div>
+                  {/* Course-Sections List */}
+                  {isLoadingCourses ? (
+                    <p className="text-sm text-gray-500">Loading courses...</p>
+                  ) : courseSections.length > 0 ? (
+                    <div className="space-y-2">
+                      {courseSections.map((cs, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200"
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm font-bold text-blue-700 bg-blue-50 px-2 py-1 rounded">
+                              {cs.program}
+                            </span>
+                            <span className="text-xs text-gray-400">→</span>
+                            <span className="text-sm font-semibold text-gray-900">
+                              {cs.course}
+                            </span>
+                            <span className="text-xs text-gray-400">→</span>
+                            <span className="text-sm text-gray-700">
+                              Section {cs.section}
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => handleDeleteCourseSection(cs)}
+                            className="text-red-600 hover:text-red-700 p-1"
+                            title="Delete course-section"
+                          >
+                            <FiTrash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 bg-gray-50 rounded-lg border border-gray-200">
+                      <p className="text-sm text-gray-500">
+                        No courses added yet
+                      </p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        Add your first course above
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
+            </TabsContent>
 
-              <Button
-                type="submit"
-                disabled={
-                  isUpdatingPassword ||
-                  isPasswordLocked ||
-                  !currentPassword ||
-                  !newPassword ||
-                  !confirmPassword
-                }
-              >
-                {isPasswordLocked
-                  ? `Locked - Try again in ${formatRemainingTime(
-                      passwordLockoutTime
-                    )}`
-                  : isUpdatingPassword
-                  ? "Updating Password..."
-                  : "Update Password"}
-              </Button>
-            </form>
-          </TabsContent>
-        </CustomTabs>
-      </CardContent>
-    </Card>
+            <TabsContent value="attendance" className="pt-6">
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="late-threshold"
+                    className="inline-flex items-center"
+                  >
+                    Late Threshold (minutes)
+                    <HelpTooltip
+                      term="Late Threshold / Grace Period"
+                      definition="How many minutes after class starts can students scan and still be marked 'present'. After this time, they're marked 'late'. For example: 15 minutes means students have until 15 minutes after class begins."
+                    />
+                  </Label>
+                  {isLoadingSettings ? (
+                    <div className="flex items-center justify-center py-4">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
+                    </div>
+                  ) : (
+                    <>
+                      <Input
+                        id="late-threshold"
+                        type="number"
+                        min="1"
+                        max="60"
+                        value={lateThreshold}
+                        onChange={(e) =>
+                          setLateThreshold(parseInt(e.target.value) || 15)
+                        }
+                      />
+                      <p className="text-sm text-gray-500">
+                        Mark student as LATE if they scan after this time.
+                        (Current: {lateThreshold} minutes)
+                      </p>
+                    </>
+                  )}
+                </div>
+                <Button type="submit" disabled={isSaving || isLoadingSettings}>
+                  {isSaving ? "Saving..." : "Save Changes"}
+                </Button>
+              </form>
+            </TabsContent>
+
+            <TabsContent value="admin" className="pt-6">
+              <form onSubmit={handlePasswordUpdate} className="space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="admin-email">Instructor Email</Label>
+                  <Input
+                    id="admin-email"
+                    type="email"
+                    value={adminEmail}
+                    disabled
+                    className="bg-gray-50"
+                  />
+                  <p className="text-sm text-gray-500">
+                    This is your current email address used for login.
+                  </p>
+                </div>
+
+                <div className="border-t pt-4 mt-4">
+                  <h3 className="text-lg font-semibold mb-4">
+                    Change Password
+                  </h3>
+
+                  {passwordError && (
+                    <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                      <p className="text-sm text-red-600">{passwordError}</p>
+                    </div>
+                  )}
+
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="current-password">Current Password</Label>
+                      <Input
+                        id="current-password"
+                        type="password"
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                        placeholder="Enter your current password"
+                        disabled={isUpdatingPassword || isPasswordLocked}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="new-password">New Password</Label>
+                      <Input
+                        id="new-password"
+                        type="password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="Enter new password (min 6 characters)"
+                        disabled={isUpdatingPassword || isPasswordLocked}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="confirm-password">
+                        Confirm New Password
+                      </Label>
+                      <Input
+                        id="confirm-password"
+                        type="password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="Re-enter new password"
+                        disabled={isUpdatingPassword || isPasswordLocked}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <Button
+                  type="submit"
+                  disabled={
+                    isUpdatingPassword ||
+                    isPasswordLocked ||
+                    !currentPassword ||
+                    !newPassword ||
+                    !confirmPassword
+                  }
+                >
+                  {isPasswordLocked
+                    ? `Locked - Try again in ${formatRemainingTime(
+                        passwordLockoutTime
+                      )}`
+                    : isUpdatingPassword
+                    ? "Updating Password..."
+                    : "Update Password"}
+                </Button>
+              </form>
+            </TabsContent>
+          </CustomTabs>
+        </CardContent>
+      </Card>
     </>
   );
 };
@@ -3898,7 +4776,14 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
   onClose,
 }) => {
   const { setStudents } = useDashboard();
-  const [formData, setFormData] = useState<{ studentId: string; name: string; email: string; program: string; course: string; section: string }>({
+  const [formData, setFormData] = useState<{
+    studentId: string;
+    name: string;
+    email: string;
+    program: string;
+    course: string;
+    section: string;
+  }>({
     studentId: "",
     name: "",
     email: "",
@@ -3945,15 +4830,22 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
   useEffect(() => {
     if (student && isOpen) {
       setFormData({
-        studentId: student.displayStudentId || student.studentId || '',
+        studentId: student.displayStudentId || student.studentId || "",
         name: student.name,
         email: student.email,
         program: student.program,
         course: student.course,
-        section: student.section
+        section: student.section,
       });
     } else {
-      setFormData({ studentId: "", name: "", email: "", program: "", course: "", section: "" });
+      setFormData({
+        studentId: "",
+        name: "",
+        email: "",
+        program: "",
+        course: "",
+        section: "",
+      });
     }
   }, [student, isOpen]);
 
@@ -3980,7 +4872,7 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
               s.id === student.id ? { ...student, ...formData } : s
             )
           );
-          alert('✅ Student updated successfully!');
+          alert("✅ Student updated successfully!");
           onClose();
         } else {
           alert(result.message);
@@ -3997,7 +4889,9 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
             ...formData,
           };
           setStudents((prev) => [...prev, newStudent]);
-          alert('✅ Student added successfully!\n\n🔄 The page will refresh to display the new student.');
+          alert(
+            "✅ Student added successfully!\n\n🔄 The page will refresh to display the new student."
+          );
           onClose();
           // Reload to show new student
           window.location.reload();
@@ -4062,7 +4956,12 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
               value={formData.program}
               onChange={(e) => {
                 const value = e.target.value;
-                setFormData((prev) => ({ ...prev, program: value, course: "", section: "" }));
+                setFormData((prev) => ({
+                  ...prev,
+                  program: value,
+                  course: "",
+                  section: "",
+                }));
               }}
               required
             >
@@ -4094,7 +4993,11 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
               value={formData.course}
               onChange={(e) => {
                 const value = e.target.value;
-                setFormData((prev) => ({ ...prev, course: value, section: "" }));
+                setFormData((prev) => ({
+                  ...prev,
+                  course: value,
+                  section: "",
+                }));
               }}
               required
             >
@@ -4103,7 +5006,10 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
               {Array.from(
                 new Set(
                   courseSections
-                    .filter((cs) => !formData.program || cs.program === formData.program)
+                    .filter(
+                      (cs) =>
+                        !formData.program || cs.program === formData.program
+                    )
                     .map((cs) => cs.course)
                 )
               ).map((course) => (
@@ -4141,7 +5047,10 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
                     (!formData.program || cs.program === formData.program)
                 )
                 .map((cs) => (
-                  <option key={`${cs.program}-${cs.course}-${cs.section}`} value={cs.section}>
+                  <option
+                    key={`${cs.program}-${cs.course}-${cs.section}`}
+                    value={cs.section}
+                  >
                     Section {cs.section}
                   </option>
                 ))}
@@ -4243,7 +5152,7 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
 export const AdminLayout: React.FC = () => {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [showTour, setShowTour] = useState(false);
-  
+
   // Instructor info state
   const [instructorLastName, setInstructorLastName] = useState("Instructor");
   const [instructorInitial, setInstructorInitial] = useState("I");
@@ -4344,8 +5253,8 @@ export const AdminLayout: React.FC = () => {
             // Map to the Student interface format
             const mappedStudents: Student[] = studentsData.map((s) => ({
               id: s.id,
-              studentId: s.studentId, // legacy internal id
-              displayStudentId: s.displayStudentId || s.studentId, // prefer actual institutional id
+              studentId: s.studentId,
+              displayStudentId: s.displayStudentId || s.studentId,
               name: s.name,
               email: s.email,
               program: s.program || "N/A",
@@ -4374,37 +5283,43 @@ export const AdminLayout: React.FC = () => {
 
             // Live updates for attendance records (no manual refresh needed)
             try {
-              const { collection, query, where, orderBy, onSnapshot, limit } = await import("firebase/firestore");
+              const { collection, query, where, orderBy, onSnapshot, limit } =
+                await import("firebase/firestore");
               const { db } = await import("./firebase");
               const q = query(
-                collection(db, 'attendance'),
-                where('instructorId', '==', user.uid),
-                orderBy('scannedAt', 'desc'),
+                collection(db, "attendance"),
+                where("instructorId", "==", user.uid),
+                orderBy("scannedAt", "desc"),
                 limit(300)
               );
               if (unsubAttendance) unsubAttendance();
               unsubAttendance = onSnapshot(q, (snap) => {
                 const liveRecords = snap.docs.map((d) => d.data() as any);
-                const mappedLive: AttendanceRecord[] = liveRecords.map((r: any) => {
-                  const ts = r.timestamp || new Date(r.scannedAt).getTime();
-                  const isoDate = new Date(ts).toISOString().split('T')[0];
-                  return {
-                    id: r.id || `${r.studentId}-${r.classId}-${ts}`,
-                    studentId: r.studentId,
-                    name: r.studentName,
-                    date: isoDate,
-                    time: new Date(r.scannedAt).toLocaleTimeString(),
-                    status: (r.status || 'present').toUpperCase() as 'PRESENT' | 'LATE' | 'ABSENT',
-                    program: r.program || 'N/A',
-                    course: r.course || 'N/A',
-                    section: r.section || 'N/A',
-                    className: r.className,
-                  };
-                });
+                const mappedLive: AttendanceRecord[] = liveRecords.map(
+                  (r: any) => {
+                    const ts = r.timestamp || new Date(r.scannedAt).getTime();
+                    const isoDate = new Date(ts).toISOString().split("T")[0];
+                    return {
+                      id: r.id || `${r.studentId}-${r.classId}-${ts}`,
+                      studentId: r.studentId,
+                      name: r.studentName,
+                      date: isoDate,
+                      time: new Date(r.scannedAt).toLocaleTimeString(),
+                      status: (r.status || "present").toUpperCase() as
+                        | "PRESENT"
+                        | "LATE"
+                        | "ABSENT",
+                      program: r.program || "N/A",
+                      course: r.course || "N/A",
+                      section: r.section || "N/A",
+                      className: r.className,
+                    };
+                  }
+                );
                 setRecords(mappedLive);
               });
             } catch (liveErr) {
-              console.warn('Live attendance subscription failed:', liveErr);
+              console.warn("Live attendance subscription failed:", liveErr);
             }
           } catch (error) {
             console.error("Error fetching dashboard data:", error);
@@ -4534,8 +5449,8 @@ export const AdminLayout: React.FC = () => {
         />
 
         <div className="flex-1 flex flex-col lg:pl-64">
-          <Topbar 
-            onMenuClick={() => setIsMobileSidebarOpen(true)} 
+          <Topbar
+            onMenuClick={() => setIsMobileSidebarOpen(true)}
             onReplayTour={handleReplayTour}
             instructorLastName={instructorLastName}
             instructorInitial={instructorInitial}

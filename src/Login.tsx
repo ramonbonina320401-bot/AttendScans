@@ -626,13 +626,7 @@ export default function LoginComponent() {
               >
                 Password
               </label>
-              <button
-                type="button"
-                onClick={() => setShowForgotPassword(true)}
-                className="text-xs text-blue-600 hover:text-blue-800 hover:underline focus:outline-none"
-              >
-                Forgot Password?
-              </button>
+              
             </div>
             <div className="relative">
               <input
@@ -658,6 +652,13 @@ export default function LoginComponent() {
                 )}
               </button>
             </div>
+            <button
+                type="button"
+                onClick={() => setShowForgotPassword(true)}
+                className="text-xs px-2 text-blue-600 hover:text-blue-800 hover:underline focus:outline-none"
+              >
+                Forgot Password?
+              </button>
           </div>
 
           {/* Error Message */}

@@ -15,6 +15,7 @@ import {
   AttendanceRecordsPage,
   StudentManagementPage,
   SettingsPage,
+  CoursesPage, // NEW IMPORT
 } from "./AdminLayout.tsx"; // Assuming AdminLayout.tsx is in src/
 
 // --- Import Security Components ---
@@ -31,20 +32,20 @@ function App() {
         <Route path="/signup" element={<Signup />} />
 
         {/* --- Protected Student Dashboard Route --- */}
-        <Route 
-          path="/StudentDashboard" 
+        <Route
+          path="/StudentDashboard"
           element={
             <ProtectedRoute requiredRole="student">
               <ActivityMonitor timeout={5 * 60 * 1000} warningTime={60 * 1000}>
                 <StudentDashboard />
               </ActivityMonitor>
             </ProtectedRoute>
-          } 
+          }
         />
 
         {/* --- Protected Admin Dashboard Routes (Using AdminLayout) --- */}
-        <Route 
-          path="/dashboard" 
+        <Route
+          path="/dashboard"
           element={
             <ProtectedRoute requiredRole="instructor">
               <ActivityMonitor timeout={5 * 60 * 1000} warningTime={60 * 1000}>
@@ -54,16 +55,14 @@ function App() {
           }
         >
           {/* Child Routes - these render inside AdminLayout's <Outlet /> */}
-
           {/* index=true makes this the default page for /dashboard */}
           <Route index element={<DashboardPage />} />
-
           {/* Other admin pages - paths are relative to /dashboard */}
+          <Route path="courses" element={<CoursesPage />} /> {/* NEW ROUTE */}
           <Route path="generate-qr" element={<GenerateQrPage />} />
           <Route path="records" element={<AttendanceRecordsPage />} />
           <Route path="students" element={<StudentManagementPage />} />
           <Route path="settings" element={<SettingsPage />} />
-
           {/* Add any other pages that should use the AdminLayout here */}
         </Route>
 

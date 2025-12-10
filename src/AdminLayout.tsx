@@ -7,13 +7,7 @@ import React, {
   useRef,
 } from "react";
 import { createPortal } from "react-dom";
-import {
-  Link,
-  NavLink,
-  Outlet,
-  useNavigate,
-  useLocation,
-} from "react-router-dom";
+import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import QRCode from "qrcode";
 import { auth } from "./firebase";
 import { signOut } from "firebase/auth";
@@ -499,7 +493,6 @@ const Topbar: React.FC<{
   instructorInitial = "I",
 }) => {
   const navigate = useNavigate();
-  const location = useLocation();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -1384,7 +1377,7 @@ export const GenerateQrPage: React.FC = () => {
   const [selectedCourseSection, setSelectedCourseSection] =
     useState<string>("");
   const [className, setClassName] = useState<string>("");
-  const [duration, setDuration] = useState<number>(120); // Default 2 hours (in minutes)
+  const [duration] = useState<number>(120); // Default 2 hours (in minutes)
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDeployed, setIsDeployed] = useState(false);
   const [deployedAt, setDeployedAt] = useState<Date | null>(null);

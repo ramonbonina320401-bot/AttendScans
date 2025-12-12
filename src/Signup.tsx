@@ -422,8 +422,24 @@ export default function Signup() {
       
       // Save to Firestore
       console.log("Saving user data to Firestore...");
-      await setDoc(doc(db, "users", user.uid), userData);
-      console.log("User data saved successfully");
+      console.log("User UID:", user.uid);
+      console.log("Current auth user:", auth.currentUser?.uid);
+      console.log("User data:", userData);
+      
+      try {
+        // Get a fresh auth token before writing
+        const token = await user.getIdToken(true);
+        console.log("Fresh token obtained, length:", token?.length);
+        
+        await setDoc(doc(db, "users", user.uid), userData);
+        console.log("User data saved successfully");
+      } catch (firestoreError: any) {
+        console.error("Firestore write failed:", firestoreError);
+        console.error("Error code:", firestoreError.code);
+        console.error("Error message:", firestoreError.message);
+        console.error("Auth state at error:", auth.currentUser?.uid);
+        throw firestoreError;
+      }
 
       // Sign the user out so we don't auto-redirect them while they're
       // still unverified. The login page will enforce verification on sign-in.

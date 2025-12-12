@@ -3073,15 +3073,15 @@ export const StudentManagementPage: React.FC = () => {
               </div>
               <div className="flex gap-2 w-full sm:w-auto">
                 <Button
-                  variant={viewMode === \"list\" ? \"default\" : \"outline\"}
-                  onClick={() => setViewMode(\"list\")}
+                  variant={viewMode === "list" ? "default" : "outline"}
+                  onClick={() => setViewMode("list")}
                   className="flex-1 sm:flex-none"
                 >
                   List View
                 </Button>
                 <Button
-                  variant={viewMode === \"grouped\" ? \"default\" : \"outline\"}
-                  onClick={() => setViewMode(\"grouped\")}
+                  variant={viewMode === "grouped" ? "default" : "outline"}
+                  onClick={() => setViewMode("grouped")}
                   className="flex-1 sm:flex-none"
                 >
                   Group by Class
@@ -3151,7 +3151,7 @@ export const StudentManagementPage: React.FC = () => {
             </div>
 
             {/* Sort and Pagination Controls */}
-            {viewMode === \"list\" && (
+            {viewMode === "list" && (
               <div className="flex flex-col sm:flex-row justify-between items-center gap-3">
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-gray-600">Sort by:</span>
@@ -3167,9 +3167,9 @@ export const StudentManagementPage: React.FC = () => {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setSortOrder(sortOrder === \"asc\" ? \"desc\" : \"asc\")}
+                    onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
                   >
-                    {sortOrder === \"asc\" ? \"↑\" : \"↓\"}
+                    {sortOrder === "asc" ? "↑" : "↓"}
                   </Button>
                 </div>
                 <div className="flex items-center gap-2">

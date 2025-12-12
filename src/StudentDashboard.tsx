@@ -20,8 +20,11 @@ import {
   ShieldCheck,
   XCircle,
   AlertTriangle,
+  HelpCircle,
 } from "lucide-react";
 import { Html5Qrcode } from "html5-qrcode";
+import { GuidedTour } from "./components/GuidedTour";
+import { studentTourSteps } from "./components/tourSteps";
 
 // We need a non-visible element for the file scanner to mount to
 const FILE_SCANNER_REGION_ID = "qr-file-scanner-region";
@@ -42,6 +45,7 @@ const StudentDashboard: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false); // Prevent multiple scans
   const [sessionId, setSessionId] = useState<string>(""); // Manual session ID entry
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showTour, setShowTour] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // navigation
@@ -86,6 +90,42 @@ const StudentDashboard: React.FC = () => {
 
     fetchStudentData();
   }, [navigate]);
+
+  // --- Check if first-time user (show tour) ---
+  useEffect(() => {
+    const checkTourStatus = () => {
+      const hasSeenTour = localStorage.getItem("studentTourCompleted");
+      if (!hasSeenTour && !isLoading) {
+        // Delay tour start to ensure DOM is ready
+        const timer = setTimeout(() => {
+          console.log("Starting student guided tour");
+          setShowTour(true);
+        }, 1500);
+        return () => clearTimeout(timer);
+      }
+    };
+    
+    // Run check after data loads
+    if (!isLoading) {
+      const initTimer = setTimeout(checkTourStatus, 500);
+      return () => clearTimeout(initTimer);
+    }
+  }, [isLoading]);
+
+  const handleTourComplete = () => {
+    localStorage.setItem("studentTourCompleted", "true");
+    setShowTour(false);
+  };
+
+  const handleTourSkip = () => {
+    localStorage.setItem("studentTourCompleted", "true");
+    setShowTour(false);
+  };
+
+  const handleReplayTour = () => {
+    localStorage.removeItem("studentTourCompleted");
+    setShowTour(true);
+  };
 
   // --- Inactivity Auto-Logout (Student) ---
   useEffect(() => {
@@ -384,10 +424,20 @@ const StudentDashboard: React.FC = () => {
             </div>
           </div>
           <nav className="flex items-center gap-2">
+            {/* Replay Tour Button */}
+            <button
+              onClick={handleReplayTour}
+              className="flex items-center justify-center gap-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg px-3 py-2 hover:bg-gray-50"
+              title="Replay Tutorial"
+            >
+              <HelpCircle size={16} />
+              <span className="hidden sm:inline">Help</span>
+            </button>
             {/* THIS BUTTON NOW SWITCHES THE VIEW */}
             <button
               onClick={() => setView("report")}
               className="flex items-center justify-center gap-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg px-3 py-2 hover:bg-gray-50"
+              data-tour="view-report-btn"
             >
               <FileText size={16} />
               View Report
@@ -454,7 +504,7 @@ const StudentDashboard: React.FC = () => {
         {/* --- Main Dashboard Content --- */}
         <main className="space-y-6">
           {/* --- Attendance Status Card --- */}
-          <div className="bg-white p-6 rounded-lg shadow-md">
+          <div className="bg-white p-6 rounded-lg shadow-md" data-tour="attendance-status">
             <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2 mb-4">
               <Clock size={20} className="text-gray-500" />
               Attendance Status
@@ -494,7 +544,7 @@ const StudentDashboard: React.FC = () => {
           </div>
 
           {/* --- Scan QR Code Card --- */}
-          <div className="bg-white p-6 rounded-lg shadow-md">
+          <div className="bg-white p-6 rounded-lg shadow-md" data-tour="camera-scanner">
             <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
               <Camera size={20} className="text-gray-500" />
               Scan Attendance QR Code
@@ -558,7 +608,7 @@ const StudentDashboard: React.FC = () => {
             </div>
 
             {/* --- Manual Session ID Entry --- */}
-            <div className="mt-6 pt-6 border-t border-gray-200">
+            <div className="mt-6 pt-6 border-t border-gray-200" data-tour="manual-entry">
               <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
                 <Clock size={16} className="text-gray-500" />
                 Can't Scan? Enter Session ID
@@ -599,6 +649,15 @@ const StudentDashboard: React.FC = () => {
         hidden
       />
       <div id={FILE_SCANNER_REGION_ID} style={{ display: "none" }}></div>
+
+      {/* --- GUIDED TOUR --- */}
+      {showTour && (
+        <GuidedTour
+          steps={studentTourSteps}
+          onComplete={handleTourComplete}
+          onSkip={handleTourSkip}
+        />
+      )}
     </div>
   );
 };

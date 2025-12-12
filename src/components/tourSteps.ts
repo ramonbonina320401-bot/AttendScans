@@ -37,3 +37,34 @@ export const instructorTourSteps: TourStep[] = [
     position: "right",
   },
 ];
+
+export const studentTourSteps: TourStep[] = [
+  {
+    target: "attendance-status",
+    title: "📅 Check Your Status",
+    description:
+      "This shows whether you've marked attendance today. Make sure to scan the QR code before the session expires!",
+    position: "bottom",
+  },
+  {
+    target: "camera-scanner",
+    title: "📸 QR Code Scanner",
+    description:
+      "Click 'Start Camera' to activate your camera, then point it at the QR code displayed by your instructor. The app will automatically detect and scan it.",
+    position: "bottom",
+  },
+  {
+    target: "manual-entry",
+    title: "⌨️ Manual Session ID Entry",
+    description:
+      "If you can't scan the QR code, ask your instructor for the 8-character Session ID and enter it here instead.",
+    position: "top",
+  },
+  {
+    target: "view-report-btn",
+    title: "📊 View Your Report",
+    description:
+      "Click here to see your full attendance history, including dates, courses, and your attendance percentage.",
+    position: "bottom",
+  },
+];

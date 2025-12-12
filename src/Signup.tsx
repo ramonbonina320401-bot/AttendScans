@@ -70,6 +70,9 @@ export default function Signup() {
   // State for email verification success modal
   const [showVerificationModal, setShowVerificationModal] = useState(false);
   const [signupEmail, setSignupEmail] = useState("");
+  
+  // Loading state for form submission
+  const [isLoading, setIsLoading] = useState(false);
 
   // Redirect if already logged in
   useEffect(() => {
@@ -270,6 +273,10 @@ export default function Signup() {
       return;
     }
 
+    // Prevent multiple submissions
+    if (isLoading) return;
+    setIsLoading(true);
+
     // Validate instructor access key if role is instructor
     if (selectedRole === "instructor") {
       // Check if locked out
@@ -317,6 +324,7 @@ export default function Signup() {
               accessKey: `Invalid instructor access key. (${result.attemptsLeft} attempts remaining)` 
             }));
           }
+          setIsLoading(false);
           return;
         }
 
@@ -329,6 +337,7 @@ export default function Signup() {
           ...prev, 
           accessKey: "Failed to validate access key. Please try again." 
         }));
+        setIsLoading(false);
         return;
       }
     }
@@ -358,6 +367,7 @@ export default function Signup() {
             ...prev, 
             studentId: "This Student ID is already registered in the system. Please use a different Student ID or contact support." 
           }));
+          setIsLoading(false);
           return;
         }
 
@@ -373,6 +383,7 @@ export default function Signup() {
             ...prev, 
             studentId: "This Student ID is already registered by an instructor. Please use a different Student ID or contact your instructor." 
           }));
+          setIsLoading(false);
           return;
         }
       }
@@ -435,6 +446,7 @@ export default function Signup() {
       // Show verification modal
       setSignupEmail(email);
       setShowVerificationModal(true);
+      setIsLoading(false);
     } catch (err: any) {
       console.error("Signup error details:", err);
       console.error("Error code:", err.code);
@@ -454,6 +466,7 @@ export default function Signup() {
       }
       
       setErrors(prev => ({ ...prev, general: errorMessage }));
+      setIsLoading(false);
     }
   };
 
@@ -815,10 +828,20 @@ export default function Signup() {
 
             <button
               type="submit"
-              className="w-full bg-black text-white py-2.5 rounded-lg hover:bg-gray-800 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black disabled:bg-gray-400 disabled:cursor-not-allowed"
-              disabled={!isFormValid}
+              className="w-full bg-black text-white py-2.5 rounded-lg hover:bg-gray-800 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              disabled={!isFormValid || isLoading}
             >
-              Register
+              {isLoading ? (
+                <>
+                  <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span>Creating Account...</span>
+                </>
+              ) : (
+                "Register"
+              )}
             </button>
           </form>
 

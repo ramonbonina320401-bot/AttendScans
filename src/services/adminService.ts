@@ -169,24 +169,19 @@ export const addStudentToClass = async (studentData: {
 
     const displayId = studentData.studentId && idFormat.test(studentData.studentId.trim()) ? studentData.studentId.trim() : studentId;
 
-    // Check for duplicate Student ID in users collection (students who signed up)
-    const usersQuery = query(
-      collection(db, 'users'),
-      where('displayStudentId', '==', displayId)
-    );
-    const existingUsers = await getDocs(usersQuery);
-
-    // Also check in registeredStudents collection (already registered by instructors)
+    // Check ONLY in registeredStudents collection if THIS instructor already added this student
+    // It's OK if the student has a user account - that's the normal workflow
     const registeredQuery = query(
       collection(db, 'registeredStudents'),
-      where('displayStudentId', '==', displayId)
+      where('displayStudentId', '==', displayId),
+      where('instructorId', '==', user.uid)
     );
     const existingRegistered = await getDocs(registeredQuery);
 
-    if (!existingUsers.empty || !existingRegistered.empty) {
+    if (!existingRegistered.empty) {
       return { 
         success: false, 
-        message: `Student ID ${displayId} is already registered in the system. Each student must have a unique ID.` 
+        message: `Student ID ${displayId} is already in your class roster. You cannot add the same student twice.` 
       };
     }
 

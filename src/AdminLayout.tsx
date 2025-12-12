@@ -3073,14 +3073,14 @@ export const StudentManagementPage: React.FC = () => {
               </div>
               <div className="flex gap-2 w-full sm:w-auto">
                 <Button
-                  variant={viewMode === "list" ? "default" : "outline"}
+                  variant={viewMode === "list" ? "primary" : "outline"}
                   onClick={() => setViewMode("list")}
                   className="flex-1 sm:flex-none"
                 >
                   List View
                 </Button>
                 <Button
-                  variant={viewMode === "grouped" ? "default" : "outline"}
+                  variant={viewMode === "grouped" ? "primary" : "outline"}
                   onClick={() => setViewMode("grouped")}
                   className="flex-1 sm:flex-none"
                 >
@@ -3403,7 +3403,7 @@ export const StudentManagementPage: React.FC = () => {
                         return (
                           <Button
                             key={pageNum}
-                            variant={currentPage === pageNum ? "default" : "outline"}
+                            variant={currentPage === pageNum ? "primary" : "outline"}
                             size="sm"
                             onClick={() => setCurrentPage(pageNum)}
                             className="w-10"

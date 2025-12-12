@@ -385,8 +385,18 @@ export default function Signup() {
       console.log("User created successfully:", user.uid);
 
       // Send verification email
-      await sendEmailVerification(user);
-      console.log("Verification email sent");
+      try {
+        await sendEmailVerification(user);
+        console.log("Verification email sent");
+      } catch (emailError: any) {
+        // Handle too-many-requests error gracefully
+        if (emailError.code === 'auth/too-many-requests') {
+          console.warn("Verification email rate limited, but account created successfully");
+        } else {
+          console.error("Failed to send verification email:", emailError);
+          // Continue anyway - user can request new verification email later
+        }
+      }
 
       // Store additional user data in Firestore
       const userData = selectedRole === "student" 
@@ -409,44 +419,20 @@ export default function Signup() {
             createdAt: new Date().toISOString()
           };
       
-      // Save to Firestore
+      // Save to Firestore - reduced wait time for better UX
       console.log("Saving user data to Firestore...");
-      console.log("User UID:", user.uid);
-      console.log("User data:", userData);
-      console.log("Auth current user:", auth.currentUser?.uid);
       
-      // Ensure we have a valid auth token before attempting to write
-      try {
-        const idToken = await user.getIdToken(true);
-        console.log("Got ID token:", idToken ? "Yes" : "No");
-      } catch (tokenError) {
-        console.error("Failed to get ID token:", tokenError);
-      }
+      // Brief wait for auth to initialize (reduced from 1000ms to 300ms)
+      await new Promise(resolve => setTimeout(resolve, 300));
       
-      // Wait a moment for auth to fully initialize
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      try {
-        await setDoc(doc(db, "users", user.uid), userData);
-        console.log("✅ User data saved successfully to Firestore");
-      } catch (firestoreError: any) {
-        console.error("❌ Firestore write failed:", firestoreError);
-        console.error("Error code:", firestoreError.code);
-        console.error("Error message:", firestoreError.message);
-        console.error("Current auth user at error time:", auth.currentUser?.uid);
-        throw firestoreError;
-      }
+      await setDoc(doc(db, "users", user.uid), userData);
+      console.log("✅ User data saved successfully to Firestore");
 
       // Sign the user out so we don't auto-redirect them while they're
       // still unverified. The login page will enforce verification on sign-in.
-      console.log("Signing out user to prevent auto-redirect...");
       await signOut(auth);
-      console.log("User signed out successfully");
-      
-      // Small delay to ensure auth state fully propagates
-      await new Promise(resolve => setTimeout(resolve, 100));
 
-      // Show verification modal instead of alert
+      // Show verification modal
       setSignupEmail(email);
       setShowVerificationModal(true);
     } catch (err: any) {

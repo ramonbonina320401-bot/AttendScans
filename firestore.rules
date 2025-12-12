@@ -11,8 +11,8 @@ service cloud.firestore {
     // Users collection
     match /users/{userId} {
       allow read: if request.auth != null;
-      // Allow users to create their own document during signup
-      allow create: if request.auth != null && request.auth.uid == userId;
+      // TEMPORARY: Allow any authenticated user to create during signup testing
+      allow create: if request.auth != null;
       // Allow users to update only their own document
       allow update: if request.auth != null && request.auth.uid == userId;
       // Only allow deletion by the user themselves

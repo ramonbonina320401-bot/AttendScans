@@ -3072,7 +3072,7 @@ export const StudentManagementPage: React.FC = () => {
                     Middle Initial
                   </li>
                   <li>
-                    <strong>Email:</strong> Valid email address (required)
+                    <strong>Email:</strong> Valid email address (optional - for login purposes)
                   </li>
                   <li>
                     <strong>Program/Course/Section:</strong> Must match your
@@ -3108,9 +3108,6 @@ export const StudentManagementPage: React.FC = () => {
                     NAME
                   </th>
                   <th className="px-4 py-3 text-left font-medium text-gray-600">
-                    EMAIL
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600">
                     PROGRAM - COURSE - SECTION
                   </th>
                   <th className="px-4 py-3 text-right font-medium text-gray-600">
@@ -3136,7 +3133,6 @@ export const StudentManagementPage: React.FC = () => {
                           student.id}
                       </td>
                       <td className="px-4 py-3">{student.name}</td>
-                      <td className="px-4 py-3">{student.email}</td>
                       <td className="px-4 py-3">
                         <span className="inline-flex items-center">
                           {student.program || "N/A"} - {student.course} -
@@ -3172,7 +3168,7 @@ export const StudentManagementPage: React.FC = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={5} className="text-center px-4 py-4">
+                    <td colSpan={4} className="text-center px-4 py-4">
                       No students found.
                     </td>
                   </tr>
@@ -3227,12 +3223,6 @@ export const StudentManagementPage: React.FC = () => {
                     </CustomDropdown>
                   </div>
                   <div className="mt-4 border-t pt-4 space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Email:</span>
-                      <span className="font-medium text-gray-800 truncate">
-                        {student.email}
-                      </span>
-                    </div>
                     <div className="flex justify-between">
                       <span className="text-gray-500">Program:</span>
                       <span className="font-medium text-gray-800">
@@ -4930,13 +4920,13 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
           />
         </div>
         <div>
-          <Label htmlFor="email">Email</Label>
+          <Label htmlFor="email">Email (Optional)</Label>
           <Input
             id="email"
             type="email"
             value={formData.email}
             onChange={handleChange}
-            required
+            placeholder="Optional - for login purposes"
           />
         </div>
         <div>

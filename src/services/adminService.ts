@@ -150,7 +150,7 @@ export const getAttendanceStats = async () => {
 export const addStudentToClass = async (studentData: {
   studentId?: string; // actual institutional ID (e.g., 23-3289) if provided
   name: string;
-  email: string;
+  email?: string; // Optional email
   program: string;
   course: string;
   section: string;
@@ -195,7 +195,7 @@ export const addStudentToClass = async (studentData: {
       studentId,
       displayStudentId: displayId,
       name: studentData.name,
-      email: studentData.email.toLowerCase().trim(), // Normalize email
+      email: studentData.email ? studentData.email.toLowerCase().trim() : '', // Optional email
       program: studentData.program,
       course: studentData.course,
       section: studentData.section,
@@ -222,12 +222,12 @@ export const removeStudent = async (studentId: string) => {
 };
 
 // Update student
-export const updateStudent = async (studentId: string, studentData: { studentId?: string; name: string; email: string; program: string; course: string; section: string }) => {
+export const updateStudent = async (studentId: string, studentData: { studentId?: string; name: string; email?: string; program: string; course: string; section: string }) => {
   try {
     const idFormat = /^\d{2}-\d{4}$/;
     const updatePayload: any = {
       name: studentData.name,
-      email: studentData.email.toLowerCase().trim(),
+      email: studentData.email ? studentData.email.toLowerCase().trim() : '',
       program: studentData.program,
       course: studentData.course,
       section: studentData.section

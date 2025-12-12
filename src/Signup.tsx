@@ -384,20 +384,20 @@ export default function Signup() {
       const user = userCredential.user;
       console.log("User created successfully:", user.uid);
 
-      // Wait for auth state to fully propagate
-      await new Promise<void>((resolve) => {
-        const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-          if (currentUser && currentUser.uid === user.uid) {
-            console.log("Auth state confirmed for user:", currentUser.uid);
-            unsubscribe();
-            resolve();
-          }
-        });
-      });
-
       // Send verification email
       await sendEmailVerification(user);
       console.log("Verification email sent");
+
+      // Wait longer for auth to fully initialize
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Verify we're authenticated
+      console.log("Current auth user:", auth.currentUser?.uid);
+      console.log("Auth matches created user:", auth.currentUser?.uid === user.uid);
+      
+      if (!auth.currentUser) {
+        throw new Error("Auth state not ready - current user is null");
+      }
 
       // Store additional user data in Firestore
       const userData = selectedRole === "student" 

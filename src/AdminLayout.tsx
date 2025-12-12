@@ -2520,6 +2520,8 @@ export const StudentManagementPage: React.FC = () => {
   } = useDashboard();
   const [searchQuery, setSearchQuery] = useState("");
   const [isImporting, setIsImporting] = useState(false);
+  const [showInstructionModal, setShowInstructionModal] = useState(false);
+  const [instructionConfirmed, setInstructionConfirmed] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Multi-select state
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -2683,29 +2685,25 @@ export const StudentManagementPage: React.FC = () => {
       rows.push(["Subject Code", headerCourse]);
       rows.push(["Section", headerSection]);
       rows.push([]); // blank separator
-      rows.push(["Student ID", "Student Name", "Email (Optional)"]);
+      rows.push(["Student ID", "Student Name"]);
       // Example entries
       rows.push([
         "23-3289",
-        "ABULENCIA, PETTER CAREY TALISAY",
-        "petter.carey@example.com",
+        "ABULENCIA, PETTER CAREY TALISAY"
       ]);
-      rows.push(["23-3291", "AGUS, JAMES TAHUM", "james.tahum@example.com"]);
-      rows.push(["(Add more rows below)", "(LAST, FIRST M.)", "(optional)"]);
+      rows.push(["23-3291", "AGUS, JAMES TAHUM"]);
+      rows.push(["(Add more rows below)", "(LAST, FIRST M.)"]);
 
       const worksheet = XLSX.utils.aoa_to_sheet(rows);
       worksheet["!cols"] = [
         { wch: 12 }, // Student ID
         { wch: 40 }, // Student Name
-        { wch: 30 }, // Email
       ];
 
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "Students");
       XLSX.writeFile(workbook, "Student_Import_Template.xlsx");
-      alert(
-        "📥 Template downloaded!\n\nFormat: \nRow 1: PROGRAM | <program>\nRow 2: Subject Code | <subject code>\nRow 3: Section | <section>\nRow 5 onward: Student ID (YY-NNNN) | Student Name (LAST, FIRST M.) | Email (optional)."
-      );
+      setShowInstructionModal(true);
     } catch (error) {
       console.error("Error creating template:", error);
       alert("Failed to download template. Please try again.");
@@ -2822,7 +2820,6 @@ export const StudentManagementPage: React.FC = () => {
       let successCount = 0;
       let failCount = 0;
       const errors: string[] = [];
-      const seenEmails = new Set<string>();
       const seenStudentIds = new Set<string>();
 
       for (const r of studentRows) {
@@ -2833,16 +2830,12 @@ export const StudentManagementPage: React.FC = () => {
           rawName = usingLegacy
             ? (r[0] || "").toString().trim()
             : (r[1] || "").toString().trim();
-          let email = (usingLegacy ? r[1] || "" : r[2] || "")
-            .toString()
-            .trim()
-            .toLowerCase();
 
           if (!rawName) {
             continue;
           }
 
-          // Student ID is now REQUIRED (not email)
+          // Student ID is REQUIRED
           if (!studentIdRaw) {
             errors.push(`${rawName}: Missing Student ID`);
             failCount++;
@@ -2871,32 +2864,11 @@ export const StudentManagementPage: React.FC = () => {
             continue;
           }
 
-          // Email is optional - generate placeholder if not provided
-          if (!email) {
-            email = `${studentIdRaw.replace("-", "")}@placeholder.local`;
-          } else {
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(email)) {
-              errors.push(`${rawName} (${studentIdRaw}): Invalid email format`);
-              failCount++;
-              continue;
-            }
-            if (seenEmails.has(email)) {
-              errors.push(
-                `${rawName} (${studentIdRaw}): Duplicate email in file`
-              );
-              failCount++;
-              continue;
-            }
-          }
-
           // Track uniqueness within this import batch
-          seenEmails.add(email);
           seenStudentIds.add(studentIdRaw);
 
           const result = await addStudentToClass({
             name: rawName,
-            email,
             program,
             course,
             section,
@@ -3070,9 +3042,6 @@ export const StudentManagementPage: React.FC = () => {
                   <li>
                     <strong>Name:</strong> Last Name, First Name, and optional
                     Middle Initial
-                  </li>
-                  <li>
-                    <strong>Email:</strong> Valid email address (optional - for login purposes)
                   </li>
                   <li>
                     <strong>Program/Course/Section:</strong> Must match your
@@ -3377,6 +3346,84 @@ export const StudentManagementPage: React.FC = () => {
                   Save Changes
                 </Button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Excel Import Instructions Modal */}
+      {showInstructionModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 shadow-xl max-h-[90vh] overflow-y-auto">
+            <div className="mb-4">
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                📥 Excel Template Downloaded Successfully!
+              </h3>
+              <p className="text-sm text-gray-600">
+                Please read the instructions carefully before importing your student data.
+              </p>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+              <h4 className="font-semibold text-blue-900 mb-3">📋 Template Format</h4>
+              <div className="space-y-2 text-sm text-blue-800">
+                <p><strong>Row 1:</strong> PROGRAM | [Your Program Name]</p>
+                <p><strong>Row 2:</strong> Subject Code | [Your Subject Code]</p>
+                <p><strong>Row 3:</strong> Section | [Your Section]</p>
+                <p><strong>Row 4:</strong> Leave blank (separator)</p>
+                <p><strong>Row 5:</strong> Headers - Student ID | Student Name</p>
+                <p><strong>Row 6 onwards:</strong> Your student data</p>
+              </div>
+            </div>
+
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+              <h4 className="font-semibold text-yellow-900 mb-3">⚠️ Important Guidelines</h4>
+              <ul className="list-disc list-inside space-y-2 text-sm text-yellow-800">
+                <li><strong>Student ID Format:</strong> Must be YY-NNNN (e.g., 23-3289, 24-1234)</li>
+                <li><strong>Name Format:</strong> LAST NAME, FIRST NAME MIDDLE INITIAL (e.g., DELA CRUZ, JUAN P.)</li>
+                <li><strong>No Duplicates:</strong> Each Student ID must be unique across the entire system</li>
+                <li><strong>Program/Course/Section:</strong> Must exactly match what you've set up in Settings → Courses</li>
+                <li><strong>No Empty Rows:</strong> Remove any empty rows between student entries</li>
+              </ul>
+            </div>
+
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+              <h4 className="font-semibold text-green-900 mb-3">✅ Next Steps</h4>
+              <ol className="list-decimal list-inside space-y-2 text-sm text-green-800">
+                <li>Open the downloaded Excel file</li>
+                <li>Fill in PROGRAM, Subject Code, and Section in rows 1-3</li>
+                <li>Add your students starting from row 6</li>
+                <li>Save the file</li>
+                <li>Click "Import Excel File" button to upload</li>
+                <li>Wait for confirmation - the page will auto-refresh</li>
+              </ol>
+            </div>
+
+            <div className="mb-4">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={instructionConfirmed}
+                  onChange={(e) => setInstructionConfirmed(e.target.checked)}
+                  className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700">
+                  I have read and understood the instructions above. I will follow the correct format when filling out the template.
+                </span>
+              </label>
+            </div>
+
+            <div className="flex justify-end">
+              <Button
+                disabled={!instructionConfirmed}
+                onClick={() => {
+                  setShowInstructionModal(false);
+                  setInstructionConfirmed(false);
+                }}
+                className="px-6"
+              >
+                Got it!
+              </Button>
             </div>
           </div>
         </div>
@@ -4917,16 +4964,6 @@ const StudentFormModal: React.FC<StudentFormModalProps> = ({
             value={formData.name}
             onChange={handleChange}
             required
-          />
-        </div>
-        <div>
-          <Label htmlFor="email">Email (Optional)</Label>
-          <Input
-            id="email"
-            type="email"
-            value={formData.email}
-            onChange={handleChange}
-            placeholder="Optional - for login purposes"
           />
         </div>
         <div>

@@ -1,5 +1,5 @@
 import { db, auth } from '../firebase';
-import { collection, addDoc, doc, getDoc, getDocs, query, where, deleteDoc, updateDoc, orderBy } from 'firebase/firestore';
+import { collection, addDoc, doc, getDoc, getDocs, query, where, deleteDoc, updateDoc, orderBy, setDoc } from 'firebase/firestore';
 import type { AttendanceRecord } from './attendanceService';
 
 // Extended attendance record with ID for admin use

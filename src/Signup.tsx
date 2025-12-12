@@ -388,17 +388,6 @@ export default function Signup() {
       await sendEmailVerification(user);
       console.log("Verification email sent");
 
-      // Wait longer for auth to fully initialize
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Verify we're authenticated
-      console.log("Current auth user:", auth.currentUser?.uid);
-      console.log("Auth matches created user:", auth.currentUser?.uid === user.uid);
-      
-      if (!auth.currentUser) {
-        throw new Error("Auth state not ready - current user is null");
-      }
-
       // Store additional user data in Firestore
       const userData = selectedRole === "student" 
         ? { 
@@ -420,25 +409,43 @@ export default function Signup() {
             createdAt: new Date().toISOString()
           };
       
-      // Save to Firestore
+      // Save to Firestore with retry logic
       console.log("Saving user data to Firestore...");
       console.log("User UID:", user.uid);
-      console.log("Current auth user:", auth.currentUser?.uid);
       console.log("User data:", userData);
       
-      try {
-        // Get a fresh auth token before writing
-        const token = await user.getIdToken(true);
-        console.log("Fresh token obtained, length:", token?.length);
-        
-        await setDoc(doc(db, "users", user.uid), userData);
-        console.log("User data saved successfully");
-      } catch (firestoreError: any) {
-        console.error("Firestore write failed:", firestoreError);
-        console.error("Error code:", firestoreError.code);
-        console.error("Error message:", firestoreError.message);
-        console.error("Auth state at error:", auth.currentUser?.uid);
-        throw firestoreError;
+      let retryCount = 0;
+      const maxRetries = 3;
+      let lastError: any = null;
+      
+      while (retryCount < maxRetries) {
+        try {
+          // Force token refresh to ensure auth is recognized
+          await user.getIdToken(true);
+          console.log(`Attempt ${retryCount + 1}: Saving user data...`);
+          
+          // Wait a bit for auth state to propagate (increases with each retry)
+          await new Promise(resolve => setTimeout(resolve, 500 * (retryCount + 1)));
+          
+          await setDoc(doc(db, "users", user.uid), userData);
+          console.log("User data saved successfully");
+          lastError = null;
+          break; // Success, exit retry loop
+        } catch (firestoreError: any) {
+          lastError = firestoreError;
+          retryCount++;
+          console.error(`Attempt ${retryCount} failed:`, firestoreError.code, firestoreError.message);
+          
+          if (retryCount >= maxRetries) {
+            console.error("All retry attempts exhausted");
+            console.error("Error code:", firestoreError.code);
+            console.error("Error message:", firestoreError.message);
+            throw firestoreError;
+          }
+          
+          // Wait before retrying
+          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+        }
       }
 
       // Sign the user out so we don't auto-redirect them while they're

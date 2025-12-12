@@ -351,49 +351,62 @@ export default function Signup() {
         return;
       }
 
-      // Check for duplicate Student ID if signing up as student
-      if (selectedRole === "student") {
-        const { collection, query, where, getDocs } = await import('firebase/firestore');
-        
-        // Check in users collection
-        const usersQuery = query(
-          collection(db, 'users'),
-          where('displayStudentId', '==', studentFormData.studentId.trim())
-        );
-        const existingStudents = await getDocs(usersQuery);
-        
-        if (!existingStudents.empty) {
-          setErrors(prev => ({ 
-            ...prev, 
-            studentId: "This Student ID is already registered in the system. Please use a different Student ID or contact support." 
-          }));
-          setIsLoading(false);
-          return;
-        }
-
-        // Also check in registeredStudents collection (instructor's student lists)
-        const registeredQuery = query(
-          collection(db, 'registeredStudents'),
-          where('displayStudentId', '==', studentFormData.studentId.trim())
-        );
-        const registeredStudents = await getDocs(registeredQuery);
-        
-        if (!registeredStudents.empty) {
-          setErrors(prev => ({ 
-            ...prev, 
-            studentId: "This Student ID is already registered by an instructor. Please use a different Student ID or contact your instructor." 
-          }));
-          setIsLoading(false);
-          return;
-        }
-      }
-
       console.log("Starting signup process for:", email);
 
-      // Create user with Firebase
+      // Create user with Firebase FIRST
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
       console.log("User created successfully:", user.uid);
+
+      // Check for duplicate Student ID AFTER user is created (so we have auth)
+      if (selectedRole === "student") {
+        try {
+          const { collection, query, where, getDocs } = await import('firebase/firestore');
+          
+          // Check in users collection
+          const usersQuery = query(
+            collection(db, 'users'),
+            where('displayStudentId', '==', studentFormData.studentId.trim())
+          );
+          const existingStudents = await getDocs(usersQuery);
+          
+          // Exclude the current user from the check
+          const otherStudents = existingStudents.docs.filter(doc => doc.id !== user.uid);
+          
+          if (otherStudents.length > 0) {
+            // Delete the user account we just created since student ID is duplicate
+            await user.delete();
+            setErrors(prev => ({ 
+              ...prev, 
+              studentId: "This Student ID is already registered in the system. Please use a different Student ID or contact support." 
+            }));
+            setIsLoading(false);
+            return;
+          }
+
+          // Also check in registeredStudents collection (instructor's student lists)
+          const registeredQuery = query(
+            collection(db, 'registeredStudents'),
+            where('displayStudentId', '==', studentFormData.studentId.trim())
+          );
+          const registeredStudents = await getDocs(registeredQuery);
+          
+          if (!registeredStudents.empty) {
+            // Delete the user account we just created since student ID is duplicate
+            await user.delete();
+            setErrors(prev => ({ 
+              ...prev, 
+              studentId: "This Student ID is already registered by an instructor. Please use a different Student ID or contact your instructor." 
+            }));
+            setIsLoading(false);
+            return;
+          }
+        } catch (checkError: any) {
+          console.error("Error checking student ID:", checkError);
+          // If check fails, continue with registration to avoid blocking users
+          // The duplicate check will happen on next login attempt
+        }
+      }
 
       // Send verification email
       try {

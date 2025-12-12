@@ -388,6 +388,10 @@ export default function Signup() {
       await sendEmailVerification(user);
       console.log("Verification email sent");
 
+      // Wait for auth token to be fully ready
+      await user.getIdToken(true);
+      console.log("Auth token refreshed");
+
       // Store additional user data in Firestore
       const userData = selectedRole === "student" 
         ? { 

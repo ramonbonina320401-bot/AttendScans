@@ -2522,6 +2522,18 @@ export const StudentManagementPage: React.FC = () => {
   const [isImporting, setIsImporting] = useState(false);
   const [showInstructionModal, setShowInstructionModal] = useState(false);
   const [instructionConfirmed, setInstructionConfirmed] = useState(false);
+  
+  // Advanced filtering and view options
+  const [programFilter, setProgramFilter] = useState<string>("");
+  const [courseFilter, setCourseFilter] = useState<string>("");
+  const [sectionFilter, setSectionFilter] = useState<string>("");
+  const [viewMode, setViewMode] = useState<"list" | "grouped">("list");
+  const [sortBy, setSortBy] = useState<"id" | "name" | "class">("id");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+  const [itemsPerPage, setItemsPerPage] = useState<number>(25);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Multi-select state
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -2629,14 +2641,104 @@ export const StudentManagementPage: React.FC = () => {
     }
   };
 
+  // Get unique values for filters
+  const uniquePrograms = useMemo(() => 
+    Array.from(new Set(students.map(s => s.program).filter(Boolean))).sort(),
+    [students]
+  );
+  const uniqueCourses = useMemo(() => 
+    Array.from(new Set(students.map(s => s.course).filter(Boolean))).sort(),
+    [students]
+  );
+  const uniqueSections = useMemo(() => 
+    Array.from(new Set(students.map(s => s.section).filter(Boolean))).sort(),
+    [students]
+  );
+
   const filteredStudents = useMemo(() => {
-    return students.filter(
+    let filtered = students.filter(
       (student) =>
-        student.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (student.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         student.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        student.id.toLowerCase().includes(searchQuery.toLowerCase())
+        (student.displayStudentId || student.studentId || student.id).toLowerCase().includes(searchQuery.toLowerCase())) &&
+        (programFilter === "" || student.program === programFilter) &&
+        (courseFilter === "" || student.course === courseFilter) &&
+        (sectionFilter === "" || student.section === sectionFilter)
     );
-  }, [students, searchQuery]);
+
+    // Apply sorting
+    filtered.sort((a, b) => {
+      let compareA, compareB;
+      if (sortBy === "id") {
+        compareA = a.displayStudentId || a.studentId || a.id;
+        compareB = b.displayStudentId || b.studentId || b.id;
+      } else if (sortBy === "name") {
+        compareA = a.name;
+        compareB = b.name;
+      } else { // class
+        compareA = `${a.program}-${a.course}-${a.section}`;
+        compareB = `${b.program}-${b.course}-${b.section}`;
+      }
+      
+      const comparison = compareA.localeCompare(compareB);
+      return sortOrder === "asc" ? comparison : -comparison;
+    });
+
+    return filtered;
+  }, [students, searchQuery, programFilter, courseFilter, sectionFilter, sortBy, sortOrder, programFilter, courseFilter, sectionFilter, sortBy, sortOrder]);
+
+  // Group students by class
+  const groupedStudents = useMemo(() => {
+    const groups: Record<string, typeof students> = {};
+    filteredStudents.forEach(student => {
+      const key = `${student.program}-${student.course}-${student.section}`;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(student);
+    });
+    return groups;
+  }, [filteredStudents]);
+
+  // Pagination
+  const totalPages = Math.ceil(filteredStudents.length / itemsPerPage);
+  const paginatedStudents = useMemo(() => {
+    if (viewMode === "grouped" || itemsPerPage === filteredStudents.length) return filteredStudents;
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredStudents.slice(start, start + itemsPerPage);
+  }, [filteredStudents, currentPage, itemsPerPage, viewMode]);
+
+  // Stats
+  const stats = useMemo(() => {
+    const classGroups = Object.keys(groupedStudents);
+    const mostStudentsClass = classGroups.reduce((max, key) => 
+      groupedStudents[key].length > (groupedStudents[max]?.length || 0) ? key : max,
+      classGroups[0]
+    );
+    return {
+      totalStudents: filteredStudents.length,
+      totalClasses: classGroups.length,
+      mostStudentsClass,
+      mostStudentsCount: groupedStudents[mostStudentsClass]?.length || 0
+    };
+  }, [filteredStudents, groupedStudents]);
+
+  const toggleGroup = (groupKey: string) => {
+    setCollapsedGroups(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(groupKey)) {
+        newSet.delete(groupKey);
+      } else {
+        newSet.add(groupKey);
+      }
+      return newSet;
+    });
+  };
+
+  const clearFilters = () => {
+    setProgramFilter("");
+    setCourseFilter("");
+    setSectionFilter("");
+    setSearchQuery("");
+  };
 
   const isAllSelected = useMemo(
     () =>
@@ -2939,8 +3041,26 @@ export const StudentManagementPage: React.FC = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {/* Quick Stats Summary */}
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="text-sm text-blue-600 font-medium">Total Students</div>
+              <div className="text-2xl font-bold text-blue-900">{stats.totalStudents}</div>
+            </div>
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <div className="text-sm text-green-600 font-medium">Classes</div>
+              <div className="text-2xl font-bold text-green-900">{stats.totalClasses}</div>
+            </div>
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 sm:col-span-2">
+              <div className="text-sm text-purple-600 font-medium">Most Students</div>
+              <div className="text-lg font-bold text-purple-900 truncate">
+                {stats.mostStudentsClass} ({stats.mostStudentsCount})
+              </div>
+            </div>
+          </div>
+
           <div className="flex flex-col gap-4 mb-6">
-            {/* Search and Add Button Row */}
+            {/* Search and View Mode Row */}
             <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
               <div className="relative w-full sm:w-72">
                 <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -2951,15 +3071,125 @@ export const StudentManagementPage: React.FC = () => {
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
-              <Button
-                className="w-full sm:w-auto"
-                onClick={openAddModal}
-                data-tour="add-student-btn"
-              >
-                <FiPlus className="mr-2 h-4 w-4" />
-                Add Student
-              </Button>
+              <div className="flex gap-2 w-full sm:w-auto">
+                <Button
+                  variant={viewMode === \"list\" ? \"default\" : \"outline\"}
+                  onClick={() => setViewMode(\"list\")}
+                  className="flex-1 sm:flex-none"
+                >
+                  List View
+                </Button>
+                <Button
+                  variant={viewMode === \"grouped\" ? \"default\" : \"outline\"}
+                  onClick={() => setViewMode(\"grouped\")}
+                  className="flex-1 sm:flex-none"
+                >
+                  Group by Class
+                </Button>
+                <Button
+                  className="flex-1 sm:flex-none"
+                  onClick={openAddModal}
+                  data-tour="add-student-btn"
+                >
+                  <FiPlus className="mr-2 h-4 w-4" />
+                  Add
+                </Button>
+              </div>
             </div>
+
+            {/* Filter Bar */}
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 p-4 bg-gray-50 rounded-lg border">
+              <div>
+                <label className="text-xs font-medium text-gray-700 mb-1 block">Program</label>
+                <CustomSelect
+                  value={programFilter}
+                  onChange={(e) => setProgramFilter(e.target.value)}
+                  className="text-sm"
+                >
+                  <option value="">All Programs</option>
+                  {uniquePrograms.map(p => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </CustomSelect>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-700 mb-1 block">Course</label>
+                <CustomSelect
+                  value={courseFilter}
+                  onChange={(e) => setCourseFilter(e.target.value)}
+                  className="text-sm"
+                >
+                  <option value="">All Courses</option>
+                  {uniqueCourses.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </CustomSelect>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-700 mb-1 block">Section</label>
+                <CustomSelect
+                  value={sectionFilter}
+                  onChange={(e) => setSectionFilter(e.target.value)}
+                  className="text-sm"
+                >
+                  <option value="">All Sections</option>
+                  {uniqueSections.map(s => (
+                    <option key={s} value={s}>Section {s}</option>
+                  ))}
+                </CustomSelect>
+              </div>
+              <div className="flex items-end">
+                <Button
+                  variant="outline"
+                  onClick={clearFilters}
+                  className="w-full text-sm"
+                  disabled={!programFilter && !courseFilter && !sectionFilter && !searchQuery}
+                >
+                  Clear Filters
+                </Button>
+              </div>
+            </div>
+
+            {/* Sort and Pagination Controls */}
+            {viewMode === \"list\" && (
+              <div className="flex flex-col sm:flex-row justify-between items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600">Sort by:</span>
+                  <CustomSelect
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as any)}
+                    className="text-sm w-32"
+                  >
+                    <option value="id">Student ID</option>
+                    <option value="name">Name</option>
+                    <option value="class">Class</option>
+                  </CustomSelect>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSortOrder(sortOrder === \"asc\" ? \"desc\" : \"asc\")}
+                  >
+                    {sortOrder === \"asc\" ? \"↑\" : \"↓\"}
+                  </Button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600">Show:</span>
+                  <CustomSelect
+                    value={itemsPerPage.toString()}
+                    onChange={(e) => {
+                      setItemsPerPage(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="text-sm w-24"
+                  >
+                    <option value="25">25</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                    <option value={filteredStudents.length}>All</option>
+                  </CustomSelect>
+                </div>
+              </div>
+            )}
 
             {/* Bulk Action Toolbar */}
             {selectedIds.length > 0 && (
@@ -3057,99 +3287,267 @@ export const StudentManagementPage: React.FC = () => {
           </div>
 
           {/* Desktop Table View */}
-          <div className="hidden md:block overflow-x-auto rounded-lg border relative">
-            <table className="w-full text-sm" data-tour="students-table">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3">
-                    <input
-                      type="checkbox"
-                      aria-label="Select All"
-                      checked={isAllSelected}
-                      onChange={toggleSelectAll}
-                      className="h-4 w-4 rounded border-gray-300 text-gray-600 focus:ring-gray-500"
-                    />
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600">
-                    STUDENT ID
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600">
-                    NAME
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-600">
-                    PROGRAM - COURSE - SECTION
-                  </th>
-                  <th className="px-4 py-3 text-right font-medium text-gray-600">
-                    ACTIONS
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredStudents.length > 0 ? (
-                  filteredStudents.map((student) => (
-                    <tr key={student.id}>
-                      <td className="px-4 py-3">
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.includes(student.id)}
-                          onChange={() => toggleSelect(student.id)}
-                          className="h-4 w-4 rounded border-gray-300 text-gray-600 focus:ring-gray-500"
-                        />
-                      </td>
-                      <td className="px-4 py-3 font-medium">
-                        {student.displayStudentId ||
-                          student.studentId ||
-                          student.id}
-                      </td>
-                      <td className="px-4 py-3">{student.name}</td>
-                      <td className="px-4 py-3">
-                        <span className="inline-flex items-center">
-                          {student.program || "N/A"} - {student.course} -
-                          Section {student.section}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <CustomDropdown>
-                          <DropdownTrigger>
-                            <FiMoreVertical className="h-4 w-4" />{" "}
-                            {/* ICON RESTORED */}
-                          </DropdownTrigger>
-                          <DropdownContent>
-                            <DropdownMenuItem
-                              onClick={() => openEditModal(student)}
-                            >
-                              <FiEdit2 className="mr-2 h-4 w-4" />{" "}
-                              {/* ICON RESTORED */}
-                              Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => openDeleteModal(student)}
-                              className="text-red-600 hover:bg-red-50"
-                            >
-                              <FiTrash2 className="mr-2 h-4 w-4" />{" "}
-                              {/* ICON RESTORED */}
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownContent>
-                        </CustomDropdown>
+          {viewMode === "list" ? (
+            <div className="hidden md:block overflow-x-auto rounded-lg border relative">
+              <table className="w-full text-sm" data-tour="students-table">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3">
+                      <input
+                        type="checkbox"
+                        aria-label="Select All"
+                        checked={isAllSelected}
+                        onChange={toggleSelectAll}
+                        className="h-4 w-4 rounded border-gray-300 text-gray-600 focus:ring-gray-500"
+                      />
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-600">
+                      STUDENT ID
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-600">
+                      NAME
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-600">
+                      PROGRAM - COURSE - SECTION
+                    </th>
+                    <th className="px-4 py-3 text-right font-medium text-gray-600">
+                      ACTIONS
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {paginatedStudents.length > 0 ? (
+                    paginatedStudents.map((student) => (
+                      <tr key={student.id}>
+                        <td className="px-4 py-3">
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.includes(student.id)}
+                            onChange={() => toggleSelect(student.id)}
+                            className="h-4 w-4 rounded border-gray-300 text-gray-600 focus:ring-gray-500"
+                          />
+                        </td>
+                        <td className="px-4 py-3 font-medium">
+                          {student.displayStudentId ||
+                            student.studentId ||
+                            student.id}
+                        </td>
+                        <td className="px-4 py-3">{student.name}</td>
+                        <td className="px-4 py-3">
+                          <span className="inline-flex items-center">
+                            {student.program || "N/A"} - {student.course} -
+                            Section {student.section}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <CustomDropdown>
+                            <DropdownTrigger>
+                              <FiMoreVertical className="h-4 w-4" />
+                            </DropdownTrigger>
+                            <DropdownContent>
+                              <DropdownMenuItem
+                                onClick={() => openEditModal(student)}
+                              >
+                                <FiEdit2 className="mr-2 h-4 w-4" />
+                                Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => openDeleteModal(student)}
+                                className="text-red-600 hover:bg-red-50"
+                              >
+                                <FiTrash2 className="mr-2 h-4 w-4" />
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownContent>
+                          </CustomDropdown>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={5} className="text-center px-4 py-8 text-gray-500">
+                        No students found.
                       </td>
                     </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={4} className="text-center px-4 py-4">
-                      No students found.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                  )}
+                </tbody>
+              </table>
+              
+              {/* Pagination Controls */}
+              {totalPages > 1 && itemsPerPage !== filteredStudents.length && (
+                <div className="flex justify-between items-center p-4 border-t bg-gray-50">
+                  <div className="text-sm text-gray-600">
+                    Showing {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredStudents.length)} of {filteredStudents.length}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                    >
+                      Previous
+                    </Button>
+                    <div className="flex gap-1">
+                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                        let pageNum;
+                        if (totalPages <= 5) {
+                          pageNum = i + 1;
+                        } else if (currentPage <= 3) {
+                          pageNum = i + 1;
+                        } else if (currentPage >= totalPages - 2) {
+                          pageNum = totalPages - 4 + i;
+                        } else {
+                          pageNum = currentPage - 2 + i;
+                        }
+                        return (
+                          <Button
+                            key={pageNum}
+                            variant={currentPage === pageNum ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setCurrentPage(pageNum)}
+                            className="w-10"
+                          >
+                            {pageNum}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Grouped View */
+            <div className="hidden md:block space-y-4">
+              {Object.keys(groupedStudents).length > 0 ? (
+                Object.keys(groupedStudents).sort().map(groupKey => {
+                  const [program, course, section] = groupKey.split('-');
+                  const groupStudents = groupedStudents[groupKey];
+                  const isCollapsed = collapsedGroups.has(groupKey);
+                  
+                  return (
+                    <div key={groupKey} className="border rounded-lg overflow-hidden">
+                      <div
+                        className="bg-gradient-to-r from-blue-50 to-purple-50 border-b p-4 cursor-pointer hover:from-blue-100 hover:to-purple-100 transition-colors"
+                        onClick={() => toggleGroup(groupKey)}
+                      >
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-3">
+                            <span className="text-2xl">
+                              {isCollapsed ? '▶' : '▼'}
+                            </span>
+                            <div>
+                              <h3 className="font-semibold text-lg text-gray-900">
+                                {program} - {course} - Section {section}
+                              </h3>
+                              <p className="text-sm text-gray-600">
+                                {groupStudents.length} student{groupStudents.length !== 1 ? 's' : ''}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="px-3 py-1 bg-blue-100 text-blue-800 text-sm font-medium rounded-full">
+                              {groupStudents.length}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {!isCollapsed && (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead className="bg-gray-50">
+                              <tr>
+                                <th className="px-4 py-3">
+                                  <input
+                                    type="checkbox"
+                                    checked={groupStudents.every(s => selectedIds.includes(s.id))}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setSelectedIds(prev => [...new Set([...prev, ...groupStudents.map(s => s.id)])]);
+                                      } else {
+                                        setSelectedIds(prev => prev.filter(id => !groupStudents.map(s => s.id).includes(id)));
+                                      }
+                                    }}
+                                    className="h-4 w-4 rounded border-gray-300 text-gray-600 focus:ring-gray-500"
+                                  />
+                                </th>
+                                <th className="px-4 py-3 text-left font-medium text-gray-600">
+                                  STUDENT ID
+                                </th>
+                                <th className="px-4 py-3 text-left font-medium text-gray-600">
+                                  NAME
+                                </th>
+                                <th className="px-4 py-3 text-right font-medium text-gray-600">
+                                  ACTIONS
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                              {groupStudents.map(student => (
+                                <tr key={student.id}>
+                                  <td className="px-4 py-3">
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedIds.includes(student.id)}
+                                      onChange={() => toggleSelect(student.id)}
+                                      className="h-4 w-4 rounded border-gray-300 text-gray-600 focus:ring-gray-500"
+                                    />
+                                  </td>
+                                  <td className="px-4 py-3 font-medium">
+                                    {student.displayStudentId || student.studentId || student.id}
+                                  </td>
+                                  <td className="px-4 py-3">{student.name}</td>
+                                  <td className="px-4 py-3 text-right">
+                                    <CustomDropdown>
+                                      <DropdownTrigger>
+                                        <FiMoreVertical className="h-4 w-4" />
+                                      </DropdownTrigger>
+                                      <DropdownContent>
+                                        <DropdownMenuItem onClick={() => openEditModal(student)}>
+                                          <FiEdit2 className="mr-2 h-4 w-4" />
+                                          Edit
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          onClick={() => openDeleteModal(student)}
+                                          className="text-red-600 hover:bg-red-50"
+                                        >
+                                          <FiTrash2 className="mr-2 h-4 w-4" />
+                                          Delete
+                                        </DropdownMenuItem>
+                                      </DropdownContent>
+                                    </CustomDropdown>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="text-center py-12 text-gray-500 border rounded-lg">
+                  No students found.
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Mobile Card View */}
           <div className="md:hidden space-y-4">
-            {filteredStudents.length > 0 ? (
-              filteredStudents.map((student) => (
+            {paginatedStudents.length > 0 ? (
+              paginatedStudents.map((student) => (
                 <div
                   key={student.id}
                   className="bg-white p-4 rounded-lg border shadow-sm"

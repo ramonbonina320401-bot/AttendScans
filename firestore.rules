@@ -25,8 +25,9 @@ service cloud.firestore {
     // Active sessions (QR codes)
     match /activeSessions/{sessionId} {
       allow read: if request.auth != null;
-      allow create, update: if request.auth != null;
-      allow delete: if request.auth != null;
+      // Only instructors can create, update, or delete sessions
+      allow create, update, delete: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'instructor';
     }
     
     // Instructor courses
@@ -36,11 +37,8 @@ service cloud.firestore {
     
     // Registered students (instructor's student list)
     match /registeredStudents/{studentId} {
-      // Instructors can read their students OR students can read their own record by displayStudentId
-      allow read: if request.auth != null && (
-        resource.data.instructorId == request.auth.uid ||
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.displayStudentId == resource.data.displayStudentId)
-      );
+      // Allow authenticated users to read (students need to query by displayStudentId for attendance)
+      allow read: if request.auth != null;
       // Instructors can create/update/delete their own students
       allow create: if request.auth != null && request.resource.data.instructorId == request.auth.uid;
       allow update, delete: if request.auth != null && resource.data.instructorId == request.auth.uid;

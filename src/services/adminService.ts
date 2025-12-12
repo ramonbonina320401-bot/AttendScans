@@ -290,10 +290,7 @@ export const saveSystemSettings = async (settings: SystemSettings) => {
       const user = auth.currentUser;
       if (!user) throw new Error("User not authenticated");
       
-      await addDoc(collection(db, 'settings'), {
-        ...settings,
-        userId: user.uid
-      });
+      await setDoc(doc(db, 'settings', user.uid), settings as any);
       return { success: true, message: "Settings saved successfully" };
     } catch (err: any) {
       console.error("Error saving settings:", err);

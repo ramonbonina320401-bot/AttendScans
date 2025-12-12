@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { createUserWithEmailAndPassword, sendEmailVerification, signOut } from "firebase/auth";
+import { createUserWithEmailAndPassword, sendEmailVerification, signOut, onAuthStateChanged } from "firebase/auth";
 import { doc, setDoc, getDoc } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import { useAuthState } from "react-firebase-hooks/auth";
@@ -384,13 +384,20 @@ export default function Signup() {
       const user = userCredential.user;
       console.log("User created successfully:", user.uid);
 
+      // Wait for auth state to fully propagate
+      await new Promise<void>((resolve) => {
+        const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+          if (currentUser && currentUser.uid === user.uid) {
+            console.log("Auth state confirmed for user:", currentUser.uid);
+            unsubscribe();
+            resolve();
+          }
+        });
+      });
+
       // Send verification email
       await sendEmailVerification(user);
       console.log("Verification email sent");
-
-      // Wait for auth token to be fully ready
-      await user.getIdToken(true);
-      console.log("Auth token refreshed");
 
       // Store additional user data in Firestore
       const userData = selectedRole === "student" 

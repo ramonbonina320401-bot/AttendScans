@@ -5592,14 +5592,19 @@ export const AdminLayout: React.FC = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
 
-  // Check if first-time user (show tour)
+  // Check if first-time user (show tour) - user-specific
   useEffect(() => {
     const checkTourStatus = () => {
-      const hasSeenTour = localStorage.getItem("instructorTourCompleted");
+      const user = auth.currentUser;
+      if (!user) return;
+      
+      const tourKey = `instructorTourCompleted_${user.uid}`;
+      const hasSeenTour = localStorage.getItem(tourKey);
+      
       if (!hasSeenTour) {
         // Delay tour start to ensure DOM is ready and all nav items are rendered
         const timer = setTimeout(() => {
-          console.log("Starting guided tour for new user");
+          console.log("Starting guided tour for new user:", user.uid);
           setShowTour(true);
         }, 1500);
         return () => clearTimeout(timer);
@@ -5612,17 +5617,26 @@ export const AdminLayout: React.FC = () => {
   }, []);
 
   const handleTourComplete = () => {
-    localStorage.setItem("instructorTourCompleted", "true");
+    const user = auth.currentUser;
+    if (user) {
+      localStorage.setItem(`instructorTourCompleted_${user.uid}`, "true");
+    }
     setShowTour(false);
   };
 
   const handleTourSkip = () => {
-    localStorage.setItem("instructorTourCompleted", "true");
+    const user = auth.currentUser;
+    if (user) {
+      localStorage.setItem(`instructorTourCompleted_${user.uid}`, "true");
+    }
     setShowTour(false);
   };
 
   const handleReplayTour = () => {
-    localStorage.removeItem("instructorTourCompleted");
+    const user = auth.currentUser;
+    if (user) {
+      localStorage.removeItem(`instructorTourCompleted_${user.uid}`);
+    }
     setShowTour(true);
   };
 

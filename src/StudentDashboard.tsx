@@ -91,14 +91,19 @@ const StudentDashboard: React.FC = () => {
     fetchStudentData();
   }, [navigate]);
 
-  // --- Check if first-time user (show tour) ---
+  // --- Check if first-time user (show tour) - user-specific ---
   useEffect(() => {
     const checkTourStatus = () => {
-      const hasSeenTour = localStorage.getItem("studentTourCompleted");
+      const user = auth.currentUser;
+      if (!user) return;
+      
+      const tourKey = `studentTourCompleted_${user.uid}`;
+      const hasSeenTour = localStorage.getItem(tourKey);
+      
       if (!hasSeenTour && !isLoading) {
         // Delay tour start to ensure DOM is ready
         const timer = setTimeout(() => {
-          console.log("Starting student guided tour");
+          console.log("Starting student guided tour for user:", user.uid);
           setShowTour(true);
         }, 1500);
         return () => clearTimeout(timer);
@@ -113,17 +118,26 @@ const StudentDashboard: React.FC = () => {
   }, [isLoading]);
 
   const handleTourComplete = () => {
-    localStorage.setItem("studentTourCompleted", "true");
+    const user = auth.currentUser;
+    if (user) {
+      localStorage.setItem(`studentTourCompleted_${user.uid}`, "true");
+    }
     setShowTour(false);
   };
 
   const handleTourSkip = () => {
-    localStorage.setItem("studentTourCompleted", "true");
+    const user = auth.currentUser;
+    if (user) {
+      localStorage.setItem(`studentTourCompleted_${user.uid}`, "true");
+    }
     setShowTour(false);
   };
 
   const handleReplayTour = () => {
-    localStorage.removeItem("studentTourCompleted");
+    const user = auth.currentUser;
+    if (user) {
+      localStorage.removeItem(`studentTourCompleted_${user.uid}`);
+    }
     setShowTour(true);
   };
 

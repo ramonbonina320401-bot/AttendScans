@@ -1052,12 +1052,16 @@ const Sidebar: React.FC = () => {
           const Icon = item.icon as React.ElementType;
           // ... tour attributes logic ...
           const tourAttr =
-            item.label === "Generate QR Code"
-              ? "nav-generate-qr"
-              : item.label === "Settings"
+            item.label === "Settings"
               ? "nav-settings"
               : item.label === "Courses"
-              ? "nav-courses" // Add tour tag for courses
+              ? "nav-courses"
+              : item.label === "Student Management"
+              ? "nav-students"
+              : item.label === "Generate QR Code"
+              ? "nav-generate-qr"
+              : item.label === "Attendance Records"
+              ? "nav-records"
               : undefined;
 
           return (
@@ -1117,14 +1121,16 @@ const MobileSidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
           {navItems.map((item) => {
             const Icon = item.icon as React.ElementType; // Assert type now
             const tourAttr =
-              item.label === "Generate QR Code"
-                ? "nav-generate-qr"
-                : item.label === "Settings"
+              item.label === "Settings"
                 ? "nav-settings"
-                : item.label === "Attendance Records"
-                ? "nav-records"
+                : item.label === "Courses"
+                ? "nav-courses"
                 : item.label === "Student Management"
                 ? "nav-students"
+                : item.label === "Generate QR Code"
+                ? "nav-generate-qr"
+                : item.label === "Attendance Records"
+                ? "nav-records"
                 : undefined;
             return (
               <NavLink
@@ -5588,12 +5594,21 @@ export const AdminLayout: React.FC = () => {
 
   // Check if first-time user (show tour)
   useEffect(() => {
-    const hasSeenTour = localStorage.getItem("instructorTourCompleted");
-    if (!hasSeenTour) {
-      // Delay tour start to ensure DOM is ready
-      const timer = setTimeout(() => setShowTour(true), 1000);
-      return () => clearTimeout(timer);
-    }
+    const checkTourStatus = () => {
+      const hasSeenTour = localStorage.getItem("instructorTourCompleted");
+      if (!hasSeenTour) {
+        // Delay tour start to ensure DOM is ready and all nav items are rendered
+        const timer = setTimeout(() => {
+          console.log("Starting guided tour for new user");
+          setShowTour(true);
+        }, 1500);
+        return () => clearTimeout(timer);
+      }
+    };
+    
+    // Run check after component mounts and data loads
+    const initTimer = setTimeout(checkTourStatus, 500);
+    return () => clearTimeout(initTimer);
   }, []);
 
   const handleTourComplete = () => {

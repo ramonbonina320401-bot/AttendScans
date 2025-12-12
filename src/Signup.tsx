@@ -345,6 +345,8 @@ export default function Signup() {
       // Check for duplicate Student ID if signing up as student
       if (selectedRole === "student") {
         const { collection, query, where, getDocs } = await import('firebase/firestore');
+        
+        // Check in users collection
         const usersQuery = query(
           collection(db, 'users'),
           where('displayStudentId', '==', studentFormData.studentId.trim())
@@ -354,7 +356,22 @@ export default function Signup() {
         if (!existingStudents.empty) {
           setErrors(prev => ({ 
             ...prev, 
-            studentId: "This Student ID is already registered. Please use a different Student ID or contact support." 
+            studentId: "This Student ID is already registered in the system. Please use a different Student ID or contact support." 
+          }));
+          return;
+        }
+
+        // Also check in registeredStudents collection (instructor's student lists)
+        const registeredQuery = query(
+          collection(db, 'registeredStudents'),
+          where('displayStudentId', '==', studentFormData.studentId.trim())
+        );
+        const registeredStudents = await getDocs(registeredQuery);
+        
+        if (!registeredStudents.empty) {
+          setErrors(prev => ({ 
+            ...prev, 
+            studentId: "This Student ID is already registered by an instructor. Please use a different Student ID or contact your instructor." 
           }));
           return;
         }

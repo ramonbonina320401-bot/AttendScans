@@ -167,10 +167,33 @@ export const addStudentToClass = async (studentData: {
       studentId = `STU${String(Math.floor(Math.random() * 90000) + 10000)}`;
     }
 
+    const displayId = studentData.studentId && idFormat.test(studentData.studentId.trim()) ? studentData.studentId.trim() : studentId;
+
+    // Check for duplicate Student ID in users collection (students who signed up)
+    const usersQuery = query(
+      collection(db, 'users'),
+      where('displayStudentId', '==', displayId)
+    );
+    const existingUsers = await getDocs(usersQuery);
+
+    // Also check in registeredStudents collection (already registered by instructors)
+    const registeredQuery = query(
+      collection(db, 'registeredStudents'),
+      where('displayStudentId', '==', displayId)
+    );
+    const existingRegistered = await getDocs(registeredQuery);
+
+    if (!existingUsers.empty || !existingRegistered.empty) {
+      return { 
+        success: false, 
+        message: `Student ID ${displayId} is already registered in the system. Each student must have a unique ID.` 
+      };
+    }
+
     // Add to registeredStudents collection (instructor's student list)
     await addDoc(collection(db, 'registeredStudents'), {
       studentId,
-      displayStudentId: studentData.studentId && idFormat.test(studentData.studentId.trim()) ? studentData.studentId.trim() : studentId,
+      displayStudentId: displayId,
       name: studentData.name,
       email: studentData.email.toLowerCase().trim(), // Normalize email
       program: studentData.program,

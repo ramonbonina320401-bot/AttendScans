@@ -12,6 +12,11 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if request.auth != null;
       allow write: if request.auth != null && request.auth.uid == userId;
+      // Prevent duplicate student IDs when creating student accounts
+      allow create: if request.auth != null && request.auth.uid == userId && (
+        request.resource.data.role != 'student' || 
+        !exists(/databases/$(database)/documents/users/$(request.auth.uid))
+      );
     }
     
     // Attendance records

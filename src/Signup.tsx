@@ -409,40 +409,32 @@ export default function Signup() {
             createdAt: new Date().toISOString()
           };
       
-      // Save to Firestore with retry logic
+      // Save to Firestore
       console.log("Saving user data to Firestore...");
       console.log("User UID:", user.uid);
       console.log("User data:", userData);
+      console.log("Auth current user:", auth.currentUser?.uid);
       
-      let retryCount = 0;
-      const maxRetries = 3;
+      // Ensure we have a valid auth token before attempting to write
+      try {
+        const idToken = await user.getIdToken(true);
+        console.log("Got ID token:", idToken ? "Yes" : "No");
+      } catch (tokenError) {
+        console.error("Failed to get ID token:", tokenError);
+      }
       
-      while (retryCount < maxRetries) {
-        try {
-          // Force token refresh to ensure auth is recognized
-          await user.getIdToken(true);
-          console.log(`Attempt ${retryCount + 1}: Saving user data...`);
-          
-          // Wait a bit for auth state to propagate (increases with each retry)
-          await new Promise(resolve => setTimeout(resolve, 500 * (retryCount + 1)));
-          
-          await setDoc(doc(db, "users", user.uid), userData);
-          console.log("User data saved successfully");
-          break; // Success, exit retry loop
-        } catch (firestoreError: any) {
-          retryCount++;
-          console.error(`Attempt ${retryCount} failed:`, firestoreError.code, firestoreError.message);
-          
-          if (retryCount >= maxRetries) {
-            console.error("All retry attempts exhausted");
-            console.error("Error code:", firestoreError.code);
-            console.error("Error message:", firestoreError.message);
-            throw firestoreError;
-          }
-          
-          // Wait before retrying
-          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
-        }
+      // Wait a moment for auth to fully initialize
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      try {
+        await setDoc(doc(db, "users", user.uid), userData);
+        console.log("✅ User data saved successfully to Firestore");
+      } catch (firestoreError: any) {
+        console.error("❌ Firestore write failed:", firestoreError);
+        console.error("Error code:", firestoreError.code);
+        console.error("Error message:", firestoreError.message);
+        console.error("Current auth user at error time:", auth.currentUser?.uid);
+        throw firestoreError;
       }
 
       // Sign the user out so we don't auto-redirect them while they're

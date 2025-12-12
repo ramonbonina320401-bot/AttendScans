@@ -3592,7 +3592,7 @@ export const SettingsPage: React.FC = () => {
           <TabsList>
             <TabsTrigger value="general">General</TabsTrigger>
             {/* REMOVED COURSES TAB TRIGGER */}
-            <TabsTrigger value="attendance">Attendance</TabsTrigger>
+            <TabsTrigger value="attendance">Grace Period</TabsTrigger>
             <TabsTrigger value="admin">Instructor Account</TabsTrigger>
           </TabsList>
 
@@ -4487,7 +4487,7 @@ export const SettingPage: React.FC = () => {
             <TabsList>
               <TabsTrigger value="general">General</TabsTrigger>
               <TabsTrigger value="courses">Courses</TabsTrigger>
-              <TabsTrigger value="attendance">Attendance</TabsTrigger>
+              <TabsTrigger value="attendance">Grace Period</TabsTrigger>
               <TabsTrigger value="admin">Instructor Account</TabsTrigger>
             </TabsList>
 

@@ -419,7 +419,7 @@ const StudentDashboard: React.FC = () => {
     <div className="min-h-screen bg-gray-50 p-4 sm:p-8">
       <div className="max-w-3xl mx-auto">
         {/* --- Header --- */}
-        <header className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-8">
+        <header className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 sm:gap-4 mb-6 sm:mb-8">
           <div className="flex items-center gap-3">
             <div className="flex-shrink-0 p-2 bg-gray-800 text-white rounded-lg">
               <Camera size={24} />
@@ -558,7 +558,7 @@ const StudentDashboard: React.FC = () => {
           </div>
 
           {/* --- Scan QR Code Card --- */}
-          <div className="bg-white p-6 rounded-lg shadow-md" data-tour="camera-scanner">
+          <div className="bg-white p-4 sm:p-6 rounded-lg shadow-md" data-tour="camera-scanner">
             <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
               <Camera size={20} className="text-gray-500" />
               Scan Attendance QR Code

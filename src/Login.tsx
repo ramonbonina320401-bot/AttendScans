@@ -443,7 +443,7 @@ export default function LoginComponent() {
       {/* Email Verification Modal - Render at top level for visibility */}
       {showVerificationNeeded && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[9999] animate-fade-in">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 md:p-8 max-w-md w-full animate-fade-in-down">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 sm:p-8 max-w-md w-full mx-4 animate-fade-in">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
                 <span className="text-2xl">📧</span>

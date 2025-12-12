@@ -139,15 +139,15 @@ export const GuidedTour: React.FC<GuidedTourProps> = ({
       <div
         ref={tooltipRef}
         style={tooltipStyle}
-        className="bg-white rounded-lg shadow-2xl p-5 max-w-md border-2 border-blue-500"
+        className="bg-white rounded-lg shadow-2xl p-4 sm:p-5 max-w-[90vw] sm:max-w-md mx-4 border-2 border-blue-500"
       >
         <div className="flex items-start justify-between mb-3">
-          <h3 className="text-lg font-bold text-gray-900">
+          <h3 className="text-base sm:text-lg font-bold text-gray-900 pr-2">
             {currentStepData.title}
           </h3>
           <button
             onClick={onSkip}
-            className="text-gray-400 hover:text-gray-600 ml-2"
+            className="text-gray-400 hover:text-gray-600 ml-2 flex-shrink-0"
             aria-label="Close tour"
           >
             <FiX className="w-5 h-5" />

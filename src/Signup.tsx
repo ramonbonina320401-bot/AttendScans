@@ -416,7 +416,6 @@ export default function Signup() {
       
       let retryCount = 0;
       const maxRetries = 3;
-      let lastError: any = null;
       
       while (retryCount < maxRetries) {
         try {
@@ -429,10 +428,8 @@ export default function Signup() {
           
           await setDoc(doc(db, "users", user.uid), userData);
           console.log("User data saved successfully");
-          lastError = null;
           break; // Success, exit retry loop
         } catch (firestoreError: any) {
-          lastError = firestoreError;
           retryCount++;
           console.error(`Attempt ${retryCount} failed:`, firestoreError.code, firestoreError.message);
           
